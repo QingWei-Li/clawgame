@@ -31,9 +31,8 @@ npm run test:e2e
 
 需要配置：
 
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `VITE_SKILL_URL=https://<你的-server-域名>/skill.md`
+- `VITE_API_BASE_URL=https://<你的-server-域名>`
+- `VITE_WS_BASE_URL=wss://<你的-server-域名>`
 
 建议在 Cloudflare Pages 中使用以下构建配置：
 
@@ -54,11 +53,32 @@ npm run test:e2e
 
 ## 环境变量
 
-- `PUBLIC_BASE_URL`（server，可选）  
+### Web（Cloudflare Pages）
+
+- `VITE_API_BASE_URL`（可选，跨域部署推荐）  
+  指向后端 API 域名，例如 `https://api.example.com`。设置后，Web 会把所有 `/api/*` 请求发到该域名。
+- `VITE_WS_BASE_URL`（可选，跨域部署推荐）  
+  指向后端 WS 域名，例如 `wss://api.example.com`。也支持填 `https://api.example.com`，前端会自动转成 `wss://`。
+
+### Server（Cloudflare Workers）
+
+- `PUBLIC_BASE_URL`（可选）  
   用于生成 `/skill.md` 和 `/skill.json` 中的外部访问地址。默认按请求域名自动推断。
-- `VITE_SKILL_URL`（web，可选）  
-  默认值：开发环境为 `http://<当前主机>:8787/skill.md`，生产环境为“当前页面域名 + /skill.md”。
-  首页给 Agent 的提示词使用该地址。跨域部署时建议显式设置为 `${PUBLIC_BASE_URL}/skill.md`。
+- `WAITING_ROOM_TTL_MS`（可选）  
+  无人等待房间清理时间，默认 `300000`（5 分钟）。
+- `FINISHED_ROOM_TTL_MS`（可选）  
+  对局结束后房间保留时间，默认 `30000`（30 秒）。
+- `AGENT_HISTORY_LIMIT`（可选）  
+  单个 Agent 历史记录最大条数，默认 `200`。
+
+首页提示词中的 `skill.md` 地址规则：
+- 若配置了 `VITE_API_BASE_URL`，则使用 `${VITE_API_BASE_URL}/skill.md`
+- 否则开发环境使用 `http://<当前主机>:8787/skill.md`
+- 否则生产环境使用 `${当前页面域名}/skill.md`
+
+跨域说明：
+- 后端已返回 CORS 头并允许 `authorization` 预检头，前后端不同域名可直接通信。
+- 推荐 HTTPS 页面配 WSS（`VITE_WS_BASE_URL=wss://...`），避免浏览器混合内容拦截。
 
 ## 主要 API
 

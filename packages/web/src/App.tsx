@@ -169,6 +169,40 @@ function authHeaders(token?: string): HeadersInit | undefined {
   return { authorization: `Bearer ${token}` };
 }
 
+function trimTrailingSlash(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
+const apiBaseUrl = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL?.trim() || '');
+
+function apiUrl(path: string): string {
+  if (!apiBaseUrl) {
+    return path;
+  }
+  return `${apiBaseUrl}${path}`;
+}
+
+function normalizeWsBase(raw: string): string {
+  const cleaned = trimTrailingSlash(raw);
+  if (cleaned.startsWith('https://')) {
+    return `wss://${cleaned.slice('https://'.length)}`;
+  }
+  if (cleaned.startsWith('http://')) {
+    return `ws://${cleaned.slice('http://'.length)}`;
+  }
+  return cleaned;
+}
+
+const wsBaseUrlEnv = trimTrailingSlash(import.meta.env.VITE_WS_BASE_URL?.trim() || '');
+const wsBaseUrl = wsBaseUrlEnv ? normalizeWsBase(wsBaseUrlEnv) : '';
+
+function wsUrl(pathAndQuery: string): string {
+  if (wsBaseUrl) {
+    return `${wsBaseUrl}${pathAndQuery}`;
+  }
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${pathAndQuery}`;
+}
+
 export default function App() {
   const { t, i18n } = useTranslation();
   const humanToken = getOrCreateHumanToken();
@@ -239,7 +273,7 @@ export default function App() {
     }
 
     try {
-      const restoredState = await jsonFetch<GameState>(`/api/rooms/${nextRoomId}/state`, {
+      const restoredState = await jsonFetch<GameState>(apiUrl(`/api/rooms/${nextRoomId}/state`), {
         headers: authHeaders(savedSession.seatToken),
       });
       setRoomId(nextRoomId);
@@ -286,7 +320,7 @@ export default function App() {
   useEffect(() => {
     const fetchLiveStats = async () => {
       try {
-        const next = await jsonFetch<LiveStats>('/api/stats/live');
+        const next = await jsonFetch<LiveStats>(apiUrl('/api/stats/live'));
         setLiveStats(next);
       } catch {
         // ignore in home stats poll
@@ -304,7 +338,7 @@ export default function App() {
       return;
     }
 
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?roomId=${roomId}`);
+    const ws = new WebSocket(wsUrl(`/ws?roomId=${roomId}`));
     ws.onmessage = (evt) => {
       try {
         const payload = JSON.parse(evt.data) as { type: string; state?: GameState };
@@ -326,7 +360,7 @@ export default function App() {
 
     const timer = setInterval(async () => {
       try {
-        const next = await jsonFetch<GameState>(`/api/rooms/${roomId}/state`, {
+        const next = await jsonFetch<GameState>(apiUrl(`/api/rooms/${roomId}/state`), {
           headers: authHeaders(seatToken),
         });
         setState(next);
@@ -430,7 +464,7 @@ export default function App() {
         return;
       }
       if (seatToken) {
-        void fetch(`/api/rooms/${roomId}/leave`, {
+        void fetch(apiUrl(`/api/rooms/${roomId}/leave`), {
           method: 'POST',
           headers: { authorization: `Bearer ${seatToken}` },
           keepalive: true,
@@ -448,7 +482,7 @@ export default function App() {
       return;
     }
     try {
-      await fetch(`/api/rooms/${roomId}/leave`, {
+      await fetch(apiUrl(`/api/rooms/${roomId}/leave`), {
         method: 'POST',
         headers: { authorization: `Bearer ${seatToken}` },
       });
@@ -500,7 +534,7 @@ export default function App() {
     setMsg(t('messages.joining'));
     try {
       const payload = await jsonFetch<{ seatToken: string; side: 1 | 2; state: GameState }>(
-        `/api/rooms/${joinPromptRoomId}/join`,
+        apiUrl(`/api/rooms/${joinPromptRoomId}/join`),
         {
           method: 'POST',
           body: JSON.stringify({
@@ -530,7 +564,7 @@ export default function App() {
   async function createRoom() {
     setMsg(t('messages.creating'));
     try {
-      const payload = await jsonFetch<{ roomId: string; seatToken: string; side: 1 | 2; state: GameState }>('/api/rooms', {
+      const payload = await jsonFetch<{ roomId: string; seatToken: string; side: 1 | 2; state: GameState }>(apiUrl('/api/rooms'), {
         method: 'POST',
         body: JSON.stringify({ actorType: 'human', name, locale: getSystemLocale(), clientToken: humanToken }),
       });
@@ -555,7 +589,7 @@ export default function App() {
       return;
     }
     try {
-      const payload = await jsonFetch<{ seatToken: string; side: 1 | 2; state: GameState }>(`/api/rooms/${normalizedRoomId}/join`, {
+      const payload = await jsonFetch<{ seatToken: string; side: 1 | 2; state: GameState }>(apiUrl(`/api/rooms/${normalizedRoomId}/join`), {
         method: 'POST',
         body: JSON.stringify({ actorType: 'human', name: joinName, locale: getSystemLocale(), clientToken: humanToken }),
       });
@@ -582,7 +616,7 @@ export default function App() {
         seatToken?: string;
         side?: 1 | 2;
         state?: GameState;
-      }>('/api/matchmaking/join', {
+      }>(apiUrl('/api/matchmaking/join'), {
         method: 'POST',
         body: JSON.stringify({ actorType: 'human', name: joinName, locale: getSystemLocale(), clientToken: humanToken }),
       });
@@ -618,7 +652,7 @@ export default function App() {
           seatToken?: string;
           side?: 1 | 2;
           state?: GameState;
-        }>(`/api/matchmaking/${joined.ticketId}`);
+        }>(apiUrl(`/api/matchmaking/${joined.ticketId}`));
         if (polled.matched && polled.roomId && polled.seatToken && polled.side && polled.state) {
           applyMatch({ roomId: polled.roomId, seatToken: polled.seatToken, side: polled.side, state: polled.state });
           return;
@@ -635,7 +669,7 @@ export default function App() {
     if (!roomId || !seatToken) return;
 
     try {
-      const next = await jsonFetch<GameState>(`/api/rooms/${roomId}/move`, {
+      const next = await jsonFetch<GameState>(apiUrl(`/api/rooms/${roomId}/move`), {
         method: 'POST',
         headers: { authorization: `Bearer ${seatToken}` },
         body: JSON.stringify({ x, y }),
@@ -672,10 +706,12 @@ export default function App() {
     state.status === 'playing' && state.turnDeadlineAt
       ? Math.max(0, state.turnDeadlineAt - nowTs)
       : 0;
-  const inferredSkillUrl = import.meta.env.DEV
-    ? `${window.location.protocol}//${window.location.hostname}:8787/skill.md`
-    : `${window.location.origin}/skill.md`;
-  const skillUrl = (import.meta.env.VITE_SKILL_URL?.trim() || inferredSkillUrl);
+  const inferredSkillUrl = apiBaseUrl
+    ? `${apiBaseUrl}/skill.md`
+    : import.meta.env.DEV
+      ? `${window.location.protocol}//${window.location.hostname}:8787/skill.md`
+      : `${window.location.origin}/skill.md`;
+  const skillUrl = inferredSkillUrl;
   const homeAgentPrompt = t('prompts.home', { skillUrl });
   const roomAgentPrompt = roomId
     ? t('prompts.room', { skillUrl, roomId })
