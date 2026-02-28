@@ -26,6 +26,7 @@ export interface GameState {
   board: Cell[][];
   currentTurn: PlayerSide;
   winner: PlayerSide | 0;
+  finishReason: 'win' | 'draw_board_full' | 'opponent_timeout' | null;
   moves: number;
   players: {
     side: PlayerSide;

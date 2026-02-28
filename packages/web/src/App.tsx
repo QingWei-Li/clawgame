@@ -3,12 +3,18 @@ import { useEffect, useState } from 'react';
 type Cell = 0 | 1 | 2;
 type Status = 'waiting' | 'playing' | 'finished';
 
+const BOARD_SIZE = 15;
+const GRID_GAP = 34;
+const BOARD_PADDING = 24;
+const BOARD_PIXEL_SIZE = BOARD_PADDING * 2 + GRID_GAP * (BOARD_SIZE - 1);
+
 type GameState = {
   roomId: string;
   status: Status;
   board: Cell[][];
   currentTurn: 1 | 2;
   winner: 0 | 1 | 2;
+  finishReason: 'win' | 'draw_board_full' | 'opponent_timeout' | null;
   moves: number;
   players: { side: 1 | 2; actorType: 'human' | 'ai'; actorId: string; name: string }[];
   lastMove: { x: number; y: number; side: 1 | 2 } | null;
@@ -24,7 +30,7 @@ type GameState = {
   }[];
 };
 
-const emptyBoard = () => Array.from({ length: 15 }, () => Array.from({ length: 15 }, () => 0 as Cell));
+const emptyBoard = () => Array.from({ length: BOARD_SIZE }, () => Array.from({ length: BOARD_SIZE }, () => 0 as Cell));
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const mergedHeaders = new Headers(init?.headers);
@@ -57,6 +63,7 @@ export default function App() {
     board: emptyBoard(),
     currentTurn: 1,
     winner: 0,
+    finishReason: null,
     moves: 0,
     players: [],
     lastMove: null,
@@ -184,7 +191,7 @@ export default function App() {
 
   const recentLogs = [...state.decisionLogs].slice(-40).reverse();
   const aiPrompt = roomId
-    ? `Read http://127.0.0.1:8787/skill.md, then join room ${roomId}. Continue until winner is 1 or 2; never stop early.`
+    ? `Read http://127.0.0.1:8787/skill.md, then join room ${roomId}. Continue until one of: game finished, board full, or opponent timeout > 60s. Never stop early.`
     : '';
 
   async function copyPrompt() {
@@ -244,20 +251,31 @@ export default function App() {
                   : '白子胜'
               : '进行中'}
           </p>
-          <div className="grid">
+          {state.status === 'finished' && state.finishReason && (
+            <p>结束原因: {state.finishReason}</p>
+          )}
+          <div className="board-wrap">
+            <div className="board" style={{ width: BOARD_PIXEL_SIZE, height: BOARD_PIXEL_SIZE }}>
             {state.board.map((row, y) =>
               row.map((cell, x) => (
                 <button
                   key={`${x}-${y}`}
-                  className="cell"
-                  onClick={() => place(x, y)}
-                  disabled={cell !== 0 || state.status !== 'playing' || state.currentTurn !== mySide}
+                  className={`intersection ${cell === 0 && state.status === 'playing' && state.currentTurn === mySide ? 'playable' : ''}`}
+                  style={{ left: BOARD_PADDING + x * GRID_GAP, top: BOARD_PADDING + y * GRID_GAP }}
+                  onClick={() => {
+                    if (cell !== 0 || state.status !== 'playing' || state.currentTurn !== mySide) {
+                      return;
+                    }
+                    place(x, y);
+                  }}
+                  aria-disabled={cell !== 0 || state.status !== 'playing' || state.currentTurn !== mySide}
                   aria-label={`cell-${x}-${y}`}
                 >
                   {cell !== 0 && <span className={`stone ${cell === 1 ? 'black' : 'white'}`} />}
                 </button>
               )),
             )}
+            </div>
           </div>
         </div>
         <aside className="log-panel" aria-label="ai-decision-log">

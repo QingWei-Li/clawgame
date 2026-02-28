@@ -30,10 +30,12 @@ type Room = {
   status: 'waiting' | 'playing' | 'finished';
   currentTurn: PlayerSide;
   winner: PlayerSide | 0;
+  finishReason: 'win' | 'draw_board_full' | 'opponent_timeout' | null;
   moves: number;
   players: PlayerSeat[];
   lastMove: { x: number; y: number; side: PlayerSide } | null;
   decisionLogs: DecisionLog[];
+  lastActiveAt: Record<number, number>;
   createdAt: number;
 };
 
@@ -45,6 +47,7 @@ const rooms = new Map<string, Room>();
 const aiByToken = new Map<string, AiIdentity>();
 const aiById = new Map<string, AiIdentity>();
 const seatTokenIndex = new Map<string, { roomId: string; side: PlayerSide }>();
+const TURN_TIMEOUT_MS = 60_000;
 
 const rules: RulesResponse = {
   game: 'gomoku',
@@ -99,8 +102,10 @@ Base URL: \`${baseUrl}\`
 - Each move must be reasoned from the latest board state fetched via API.
 - Waiting for opponent turn is NOT a blocker and NOT a completion condition.
 - Do not stop while status is \`waiting\` or \`playing\`.
-- Completion is valid only when one side wins (\`winner\` is 1 or 2).
-- If \`winner\` is 0, the task is not complete and must continue.
+- Completion is valid only if one of these is true:
+  - game finished by win
+  - board is full
+  - opponent timed out for more than 60 seconds on their turn
 
 ## Game Rules
 
@@ -143,7 +148,7 @@ At every turn, use this decision order:
    - you can inspect logs by \`GET ${baseUrl}/api/rooms/:roomId/logs\`
    - when \`currentTurn !== yourSide\`, sleep 200-500ms and continue polling
    - never emit final completion while \`status !== "finished"\`
-   - completion must require \`winner\` to be 1 or 2 (a winning side exists)
+   - valid completion reasons: \`win\`, \`draw_board_full\`, \`opponent_timeout\`
    - if interrupted, restart and reconnect; continue until \`status === "finished"\`
 7. Stop when \`status === "finished"\`.
 
@@ -203,6 +208,7 @@ function roomToState(room: Room): GameState {
     board: room.board,
     currentTurn: room.currentTurn,
     winner: room.winner,
+    finishReason: room.finishReason,
     moves: room.moves,
     players: room.players.map((p) => ({
       side: p.side,
@@ -231,10 +237,12 @@ function createRoomWithPlayer(actorType: ActorType, actorId: string, name: strin
     status: 'waiting',
     currentTurn: 1,
     winner: 0,
+    finishReason: null,
     moves: 0,
     players: [seat],
     lastMove: null,
     decisionLogs: [],
+    lastActiveAt: { 1: Date.now(), 2: Date.now() },
     createdAt: Date.now(),
   };
 
@@ -301,6 +309,24 @@ function replaceSeatToken(roomId: string, side: PlayerSide, newSeatToken: string
     }
   }
   seatTokenIndex.set(newSeatToken, { roomId, side });
+}
+
+function settleTurnTimeout(room: Room) {
+  if (room.status !== 'playing') {
+    return;
+  }
+  const now = Date.now();
+  const currentSide = room.currentTurn;
+  const currentLastActive = room.lastActiveAt[currentSide] ?? room.createdAt;
+  if (now - currentLastActive <= TURN_TIMEOUT_MS) {
+    return;
+  }
+
+  room.status = 'finished';
+  room.winner = currentSide === 1 ? 2 : 1;
+  room.finishReason = 'opponent_timeout';
+  settleAiStats(room);
+  broadcastRoom(room.id, { type: 'state', state: roomToState(room) });
 }
 
 function broadcastRoom(roomId: string, payload: unknown) {
@@ -484,6 +510,7 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
 
   room.players.push(newSeat);
   room.status = 'playing';
+  room.lastActiveAt[2] = Date.now();
   seatTokenIndex.set(newSeat.seatToken, { roomId: room.id, side: newSeat.side });
 
   const state = roomToState(room);
@@ -512,6 +539,7 @@ app.post('/api/rooms/:roomId/reconnect', (req, res) => {
 
   const newSeatToken = uuidv4();
   seat.seatToken = newSeatToken;
+  room.lastActiveAt[seat.side] = Date.now();
   replaceSeatToken(room.id, seat.side, newSeatToken);
   res.json({ seatToken: newSeatToken, side: seat.side, state: roomToState(room) });
 });
@@ -523,6 +551,7 @@ app.get('/api/rooms/:roomId/state', (req, res) => {
     return;
   }
 
+  settleTurnTimeout(room);
   res.json(roomToState(room));
 });
 
@@ -576,6 +605,7 @@ app.post('/api/rooms/:roomId/move', (req, res) => {
     return;
   }
 
+  settleTurnTimeout(room);
   if (room.status !== 'playing') {
     res.status(409).json({ error: 'game not in playing status' });
     return;
@@ -593,6 +623,7 @@ app.post('/api/rooms/:roomId/move', (req, res) => {
   }
 
   room.board[y][x] = seat.side;
+  room.lastActiveAt[seat.side] = Date.now();
   room.moves += 1;
   room.lastMove = { x, y, side: seat.side };
   const player = room.players.find((p) => p.side === seat.side);
@@ -612,10 +643,12 @@ app.post('/api/rooms/:roomId/move', (req, res) => {
   if (checkWinner(room.board, x, y, seat.side)) {
     room.status = 'finished';
     room.winner = seat.side;
+    room.finishReason = 'win';
     settleAiStats(room);
   } else if (room.moves >= BOARD_SIZE * BOARD_SIZE) {
     room.status = 'finished';
     room.winner = 0;
+    room.finishReason = 'draw_board_full';
     settleAiStats(room);
   } else {
     room.currentTurn = room.currentTurn === 1 ? 2 : 1;

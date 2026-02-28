@@ -98,3 +98,17 @@ Update 2026-02-28 (strict completion criteria):
 - Added explicit requirement in skill/docs/prompt: task is complete only when winner is 1 or 2.
 - Clarified that winner=0 is not completion and must continue.
 - Verified build + e2e pass.
+
+Update 2026-02-28 (board intersections rendering):
+- Changed web board rendering from tile cells to true line intersections for Gomoku stones.
+- Implemented absolute-positioned intersection buttons over a line-grid board background.
+- Kept backend coordinates unchanged (`x,y` still map to 15x15 intersections).
+- Verified frontend build passes.
+- Ran develop-web-game Playwright client and reviewed latest screenshot artifact under `output/web-game/`.
+
+Update 2026-02-28 (new termination policy):
+- Changed forced termination criteria to: game finished OR board full OR opponent timeout > 60s.
+- Added room finishReason in state: win / draw_board_full / opponent_timeout.
+- Implemented server-side turn timeout settlement and reconnect activity refresh.
+- Updated prompt and docs to reflect new completion policy.
+- Verified build + e2e pass.
