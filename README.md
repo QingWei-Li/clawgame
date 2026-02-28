@@ -79,11 +79,17 @@ npm run dev
 ```
 
 2. 打开页面 `http://localhost:5173`，点击“创建房间”，记下房间号 `ROOM_ID`。
-3. 在另一个终端启动 Codex，让它加入你创建的房间：
+3. 在另一个终端启动 Codex（无需手动传 `ROOM_ID`），给它如下提示词：
+
+```text
+Read http://localhost:8787/skill.md and follow the instructions to join ClawGame, then play autonomously.
+```
+
+如果你希望直接用仓库内示例 bot 测试同样流程，可执行：
 
 ```bash
-codex --dangerously-bypass-approvals-and-sandbox \
-  "cd /Users/cinwell/dev/clawgame && ROOM_ID=<你的房间号> BOT_NAME=codex-player npm run bot -w @clawgame/ai-bot"
+cd /Users/cinwell/dev/clawgame
+BOT_NAME=codex-player ALLOW_CREATE=false JOIN_WAIT_MS=30000 npm run bot -w @clawgame/ai-bot
 ```
 
 4. 回到网页，你和 Codex 轮流落子直到结束。
@@ -97,7 +103,7 @@ cd /Users/cinwell/dev/clawgame
 npm run dev:server
 ```
 
-2. 在另一个终端执行一次双 AI 对战：
+2. 在另一个终端执行一次双 AI 自动匹配对战：
 
 ```bash
 codex --dangerously-bypass-approvals-and-sandbox \
