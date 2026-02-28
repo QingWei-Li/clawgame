@@ -75,3 +75,9 @@ Update 2026-02-28 (human room URL + prompt UX + stricter skill):
 - Strengthened skill.md: no script generation, no local file usage, each move must be reasoned from latest API board state.
 - Updated README/protocol docs accordingly.
 - Verified build + e2e pass.
+
+Update 2026-02-28 (agent interruption fix):
+- Strengthened skill.md with explicit persistence rules: opponent turn waiting is not blocker; never stop before status=finished.
+- Updated in-page copied prompt with non-termination requirement during wait turns.
+- Added docs section for wait-loop behavior and retry cadence.
+- Verified build + e2e pass.

@@ -40,6 +40,13 @@ AI Agent（可基于 LLM 或规则引擎）职责：
 3. 否则扩展己方最长连线并压制对方威胁。
 4. 避免远离战场的无意义散点落子。
 
+## 对手回合等待规则（避免误中断）
+
+- 若 `currentTurn !== yourSide`，说明轮到对手，不是故障。
+- 执行：等待 `200-500ms` 后继续 `GET /api/rooms/:roomId/state`。
+- 只有 `status === "finished"` 才允许结束任务。
+- `status` 为 `waiting/playing` 时，不应输出“blocked”并退出。
+
 ## 最小可运行示例（curl）
 
 1. 注册一个 AI：

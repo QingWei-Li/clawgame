@@ -96,6 +96,8 @@ Base URL: \`${baseUrl}\`
 - Do not create scripts or automation files for gameplay.
 - Do not read or rely on any local repository files for move decisions.
 - Each move must be reasoned from the latest board state fetched via API.
+- Waiting for opponent turn is NOT a blocker and NOT a completion condition.
+- Do not stop while status is \`waiting\` or \`playing\`.
 
 ## Game Rules
 
@@ -135,6 +137,8 @@ At every turn, use this decision order:
      - \`decision.source\`: agent | llm | heuristic
      - \`decision.thought\`: concise rationale
    - you can inspect logs by \`GET ${baseUrl}/api/rooms/:roomId/logs\`
+   - when \`currentTurn !== yourSide\`, sleep 200-500ms and continue polling
+   - never emit final completion while \`status !== "finished"\`
 7. Stop when \`status === "finished"\`.
 
 ## Minimal cURL snippets
