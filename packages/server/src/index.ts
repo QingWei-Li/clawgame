@@ -63,6 +63,7 @@ const rules: RulesResponse = {
     'POST /api/ai/register 获取 AI token',
     'POST /api/rooms 创建房间，返回 seat token',
     'POST /api/rooms/:id/join 加入房间，返回 seat token',
+    'POST /api/rooms/:id/reconnect 中断恢复席位，返回新 seat token',
     'POST /api/rooms/:id/move 使用 seat token 落子',
   ],
 };
@@ -128,6 +129,7 @@ At every turn, use this decision order:
 4. If open room exists, join first waiting room:
    - \`POST ${baseUrl}/api/rooms/:roomId/join\` with \`Authorization: Bearer <AI token>\`
    - If a specific room id is given by a human, join that exact room first.
+   - If you previously joined this room and were interrupted, call \`POST ${baseUrl}/api/rooms/:roomId/reconnect\` first.
 5. If no open room exists, create one:
    - \`POST ${baseUrl}/api/rooms\` with \`Authorization: Bearer <AI token>\`
 6. Save seat token from create/join response, then loop:
@@ -139,6 +141,7 @@ At every turn, use this decision order:
    - you can inspect logs by \`GET ${baseUrl}/api/rooms/:roomId/logs\`
    - when \`currentTurn !== yourSide\`, sleep 200-500ms and continue polling
    - never emit final completion while \`status !== "finished"\`
+   - if interrupted, restart and reconnect; continue until \`status === "finished"\`
 7. Stop when \`status === "finished"\`.
 
 ## Minimal cURL snippets
@@ -286,6 +289,15 @@ function getAiFromAuth(req: express.Request): AiIdentity | null {
     return null;
   }
   return aiByToken.get(token) ?? null;
+}
+
+function replaceSeatToken(roomId: string, side: PlayerSide, newSeatToken: string) {
+  for (const [token, seat] of seatTokenIndex.entries()) {
+    if (seat.roomId === roomId && seat.side === side) {
+      seatTokenIndex.delete(token);
+    }
+  }
+  seatTokenIndex.set(newSeatToken, { roomId, side });
 }
 
 function broadcastRoom(roomId: string, payload: unknown) {
@@ -474,6 +486,31 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
   const state = roomToState(room);
   broadcastRoom(room.id, { type: 'state', state });
   res.status(201).json({ seatToken: newSeat.seatToken, side: newSeat.side, state });
+});
+
+app.post('/api/rooms/:roomId/reconnect', (req, res) => {
+  const ai = getAiFromAuth(req);
+  if (!ai) {
+    res.status(401).json({ error: 'invalid ai token' });
+    return;
+  }
+
+  const room = rooms.get(req.params.roomId);
+  if (!room) {
+    res.status(404).json({ error: 'room not found' });
+    return;
+  }
+
+  const seat = room.players.find((p) => p.actorType === 'ai' && p.actorId === ai.id);
+  if (!seat) {
+    res.status(404).json({ error: 'ai seat not found in room' });
+    return;
+  }
+
+  const newSeatToken = uuidv4();
+  seat.seatToken = newSeatToken;
+  replaceSeatToken(room.id, seat.side, newSeatToken);
+  res.json({ seatToken: newSeatToken, side: seat.side, state: roomToState(room) });
 });
 
 app.get('/api/rooms/:roomId/state', (req, res) => {

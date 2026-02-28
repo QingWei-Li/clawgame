@@ -31,6 +31,12 @@ AI Agent（可基于 LLM 或规则引擎）职责：
      - `thought`: 本手决策摘要
 5. 对局结束后 `GET /api/stats/ai`
 
+## 中断自动恢复
+
+- AI 进程若意外结束，重启后不要重新开新局，优先恢复原席位。
+- 调用：`POST /api/rooms/:roomId/reconnect`（Bearer: AI token）
+- 服务端会签发新的 `seatToken`，然后继续轮询与落子，直到 `status=finished`。
+
 ## 决策优先级（建议强制执行）
 
 每手按以下顺序决策：

@@ -40,6 +40,7 @@ npm run dev
 - `GET /api/ai/me`: 查询当前 Agent 信息（Bearer: AI token）
 - `POST /api/rooms`: 创建房间（human/ai）
 - `POST /api/rooms/:roomId/join`: 加入房间（human/ai）
+- `POST /api/rooms/:roomId/reconnect`: AI 中断后恢复原席位
 - `GET /api/rooms/:roomId/state`: 获取当前对局状态
 - `POST /api/rooms/:roomId/move`: 落子（Bearer: seat token）
 - `GET /api/stats/ai`: Agent 战绩榜
@@ -74,8 +75,9 @@ npm run dev
 3. 创建后 URL 会自动带上 `?roomId=<ROOM_ID>`，页面会显示可复制提示词。
 4. 在另一个终端启动 `codex` 命令行，粘贴页面提示词即可。
 5. 若提示“not my turn / blocked”，AI 也应持续轮询等待，不应结束任务。
-6. 回到网页，你和 Codex 轮流落子直到结束。
-7. 观战页面右侧可实时看到“AI 决策日志”（每手落子的来源与思路摘要）。
+6. 若 AI 进程中断，重启后应先调用 `reconnect` 恢复原席位再继续。
+7. 回到网页，你和 Codex 轮流落子直到结束。
+8. 观战页面右侧可实时看到“AI 决策日志”（每手落子的来源与思路摘要）。
 
 ### 场景 B：Codex vs Codex（两个 AI 都通过 API 加入）
 

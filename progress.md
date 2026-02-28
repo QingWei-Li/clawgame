@@ -81,3 +81,9 @@ Update 2026-02-28 (agent interruption fix):
 - Updated in-page copied prompt with non-termination requirement during wait turns.
 - Added docs section for wait-loop behavior and retry cadence.
 - Verified build + e2e pass.
+
+Update 2026-02-28 (auto-continue after interruption):
+- Added POST /api/rooms/:roomId/reconnect to restore AI seat after process interruption.
+- reconnect rotates seat token and returns latest game state.
+- Updated skill/readme/prompt text to require reconnect + continue loop until status=finished.
+- Verified build + e2e pass.
