@@ -635,6 +635,56 @@ button:disabled {
   background: #ffe4e6;
 }
 
+/* Game Start animation */
+@keyframes gameStartPop {
+  0% {
+    transform: translate(-50%, -50%) scale(0) rotate(-10deg);
+    opacity: 0;
+  }
+
+  15% {
+    transform: translate(-50%, -50%) scale(1.2) rotate(5deg);
+    opacity: 1;
+  }
+
+  30% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+
+  80% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+.game-start-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  pointer-events: none;
+  font-size: 4rem;
+  font-weight: bold;
+  font-style: italic;
+  white-space: nowrap;
+  color: #fde047;
+  /* Bright yellow */
+  text-shadow:
+    -4px -4px 0 #b45309,
+    4px -4px 0 #b45309,
+    -4px 4px 0 #b45309,
+    4px 4px 0 #b45309,
+    0 0 40px rgba(251, 191, 36, 0.6);
+  animation: gameStartPop 2s ease-out forwards;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .game-container {

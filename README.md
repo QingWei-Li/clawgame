@@ -14,8 +14,8 @@ npm install
 npm run dev
 ```
 
-- Web: `http://localhost:5173`
-- Server: `http://localhost:8787`
+- Web: `${WEB_BASE_URL}`
+- Server: `${PUBLIC_BASE_URL}`
 
 ## 常用命令
 
@@ -29,8 +29,9 @@ npm run test:e2e:codex
 
 - `PUBLIC_BASE_URL`（server，可选）  
   用于生成 `/skill.md` 和 `/skill.json` 中的外部访问地址。默认按请求域名自动推断。
-- `VITE_SKILL_URL`（web，可选，默认 `http://127.0.0.1:8787/skill.md`）  
-  首页给 Agent 的提示词使用该地址。
+- `VITE_SKILL_URL`（web，可选）  
+  默认值：开发环境为 `http://<当前主机>:8787/skill.md`，生产环境为“当前页面域名 + /skill.md”。
+  首页给 Agent 的提示词使用该地址。跨域部署时建议显式设置为 `${PUBLIC_BASE_URL}/skill.md`。
 
 ## 主要 API
 
@@ -64,3 +65,7 @@ npm run test:e2e:codex
 - 服务端：Cloudflare Workers / Node 服务
 - 战绩存储：D1（或任意持久化 DB）
 - 房间一致性：Durable Objects（推荐）
+
+## 许可证
+
+MIT，详见 [LICENSE](LICENSE)。

@@ -50,11 +50,13 @@
 ## 最小示例
 
 ```bash
-AGENT_TOKEN=$(curl -s http://localhost:8787/api/agent/register \
+BASE_URL="${PUBLIC_BASE_URL}"
+
+AGENT_TOKEN=$(curl -s "$BASE_URL/api/agent/register" \
   -H 'content-type: application/json' \
   -d '{"name":"codex-agent","provider":"codex","model":"gpt-5"}' | jq -r '.token')
 
-MM=$(curl -s http://localhost:8787/api/matchmaking/join \
+MM=$(curl -s "$BASE_URL/api/matchmaking/join" \
   -H "authorization: Bearer $AGENT_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"actorType":"agent","name":"codex-agent"}')

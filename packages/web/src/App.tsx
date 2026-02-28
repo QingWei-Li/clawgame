@@ -41,7 +41,6 @@ const emptyBoard = () => Array.from({ length: 15 }, () => Array.from({ length: 1
 const ROOM_SESSION_KEY_PREFIX = 'clawgame:room-session:';
 const HUMAN_TOKEN_KEY = 'clawgame:human-token';
 const LAST_ROOM_ID_KEY = 'clawgame:last-room-id';
-const DEFAULT_SKILL_URL = 'http://127.0.0.1:8787/skill.md';
 
 type RoomSession = {
   seatToken: string;
@@ -163,6 +162,13 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+function authHeaders(token?: string): HeadersInit | undefined {
+  if (!token) {
+    return undefined;
+  }
+  return { authorization: `Bearer ${token}` };
+}
+
 export default function App() {
   const { t, i18n } = useTranslation();
   const humanToken = getOrCreateHumanToken();
@@ -183,12 +189,21 @@ export default function App() {
   const [joinPromptRoomId, setJoinPromptRoomId] = useState<string | null>(null);
   const [joinPromptName, setJoinPromptName] = useState('');
   const [dismissedBanner, setDismissedBanner] = useState(false);
+  const [showGameStart, setShowGameStart] = useState(false);
 
   useEffect(() => {
     if (state.status !== 'finished') {
       setDismissedBanner(false);
     }
   }, [state.status]);
+
+  useEffect(() => {
+    if (state.status === 'playing' && state.moves === 0) {
+      setShowGameStart(true);
+      const timer = setTimeout(() => setShowGameStart(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [state.status, state.moves, state.roomId]);
   const roomAlertedRef = useRef(false);
   const joinPromptedRoomRef = useRef<string | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -224,7 +239,9 @@ export default function App() {
     }
 
     try {
-      const restoredState = await jsonFetch<GameState>(`/api/rooms/${nextRoomId}/state`);
+      const restoredState = await jsonFetch<GameState>(`/api/rooms/${nextRoomId}/state`, {
+        headers: authHeaders(savedSession.seatToken),
+      });
       setRoomId(nextRoomId);
       setRoomInput(nextRoomId);
       setSeatToken(savedSession.seatToken);
@@ -309,7 +326,9 @@ export default function App() {
 
     const timer = setInterval(async () => {
       try {
-        const next = await jsonFetch<GameState>(`/api/rooms/${roomId}/state`);
+        const next = await jsonFetch<GameState>(`/api/rooms/${roomId}/state`, {
+          headers: authHeaders(seatToken),
+        });
         setState(next);
       } catch {
         clearRoomSession(roomId);
@@ -322,7 +341,7 @@ export default function App() {
       ws.close();
       clearInterval(timer);
     };
-  }, [roomId, websocketParseFailed, t]);
+  }, [roomId, seatToken, websocketParseFailed, t]);
 
   useEffect(() => {
     if (!roomId || mySide !== 0) {
@@ -653,7 +672,10 @@ export default function App() {
     state.status === 'playing' && state.turnDeadlineAt
       ? Math.max(0, state.turnDeadlineAt - nowTs)
       : 0;
-  const skillUrl = (import.meta.env.VITE_SKILL_URL?.trim() || DEFAULT_SKILL_URL);
+  const inferredSkillUrl = import.meta.env.DEV
+    ? `${window.location.protocol}//${window.location.hostname}:8787/skill.md`
+    : `${window.location.origin}/skill.md`;
+  const skillUrl = (import.meta.env.VITE_SKILL_URL?.trim() || inferredSkillUrl);
   const homeAgentPrompt = t('prompts.home', { skillUrl });
   const roomAgentPrompt = roomId
     ? t('prompts.room', { skillUrl, roomId })
@@ -835,6 +857,11 @@ export default function App() {
 
         <div className={`game-container ${isTwoHumans ? 'centered' : ''}`}>
           <div className="board-wrapper">
+            {showGameStart && (
+              <div className="game-start-banner title-pixel">
+                {t('room.gameStart')}
+              </div>
+            )}
             <div className="board-info">
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <span className="status-badge">
@@ -923,7 +950,6 @@ export default function App() {
                         <span>({log.x}, {log.y}) - {log.source}</span>
                       </div>
                       <div className="log-text">{log.thought}</div>
-                      {log.thoughtOriginal ? <div className="log-text">{t('room.originalThought')}: {log.thoughtOriginal}</div> : null}
                     </div>
                   ))
                 )}

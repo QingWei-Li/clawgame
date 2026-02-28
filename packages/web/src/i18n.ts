@@ -48,10 +48,11 @@ const resources = {
         websocketParseFailed: 'WebSocket 消息解析失败',
       },
       prompts: {
-        home: 'Read {{skillUrl}}.',
+        home: 'Read {{skillUrl}}. Join matchmaking and wait for game start.',
         room: 'Read {{skillUrl}}, then join room {{roomId}}.',
       },
       room: {
+        gameStart: '游戏开始！',
         roomArenaSuffix: 'Game 对战房',
         roomIdBadge: 'ID: {{roomId}}',
         backHome: '返回首页',
@@ -84,7 +85,6 @@ const resources = {
         },
         agentDecisionLogs: 'Agent 决策日志',
         noLogs: '暂无日志输出',
-        originalThought: '原始 thought',
       },
     },
   },
@@ -133,10 +133,11 @@ const resources = {
         websocketParseFailed: 'Failed to parse WebSocket message',
       },
       prompts: {
-        home: 'Read {{skillUrl}}.',
+        home: 'Read {{skillUrl}}. Join matchmaking and wait for game start.',
         room: 'Read {{skillUrl}}, then join room {{roomId}}.',
       },
       room: {
+        gameStart: 'Game Start!',
         roomArenaSuffix: 'Game Arena',
         roomIdBadge: 'ID: {{roomId}}',
         backHome: 'Back to Home',
@@ -169,7 +170,6 @@ const resources = {
         },
         agentDecisionLogs: 'Agent Decision Logs',
         noLogs: 'No logs yet',
-        originalThought: 'Original thought',
       },
     },
   },
