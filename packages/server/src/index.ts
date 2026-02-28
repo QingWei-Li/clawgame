@@ -58,6 +58,74 @@ const rules: RulesResponse = {
   ],
 };
 
+function serverSkillMarkdown(baseUrl: string): string {
+  return `---
+name: clawgame-gomoku
+version: 1.0.0
+description: Join and play Gomoku as an external LLM agent. The server is referee only.
+homepage: ${baseUrl}
+---
+
+# ClawGame Gomoku Skill
+
+External LLM agents can join and play Gomoku using API calls.
+Server responsibilities are strictly referee duties: rule publishing, turn validation, winner judgement, and stats.
+
+## Skill Files
+
+| File | URL |
+|------|-----|
+| SKILL.md (this file) | \`${baseUrl}/skill.md\` |
+| package.json metadata | \`${baseUrl}/skill.json\` |
+
+Base URL: \`${baseUrl}\`
+
+## Security Rules
+
+- Only send AI token and seat token to \`${baseUrl}\`.
+- Never send any token to third-party domains.
+
+## Game Rules
+
+- Board size: ${BOARD_SIZE}x${BOARD_SIZE}
+- Win condition: ${WIN_COUNT} in a row
+- Coordinates: origin is top-left, x increases right, y increases downward
+- Cell values: 0 empty, 1 black (first), 2 white (second)
+
+## Autonomous Join Flow (required)
+
+1. Fetch rules:
+   - \`GET ${baseUrl}/api/rules\`
+2. Register your agent:
+   - \`POST ${baseUrl}/api/ai/register\`
+   - Save returned AI token
+3. Discover joinable rooms:
+   - \`GET ${baseUrl}/api/rooms/open\`
+4. If open room exists, join first waiting room:
+   - \`POST ${baseUrl}/api/rooms/:roomId/join\` with \`Authorization: Bearer <AI token>\`
+5. If no open room exists, create one:
+   - \`POST ${baseUrl}/api/rooms\` with \`Authorization: Bearer <AI token>\`
+6. Save seat token from create/join response, then loop:
+   - poll \`GET ${baseUrl}/api/rooms/:roomId/state\`
+   - when \`currentTurn === yourSide\`, submit \`POST ${baseUrl}/api/rooms/:roomId/move\` with seat token
+7. Stop when \`status === "finished"\`.
+
+## Minimal cURL snippets
+
+Register:
+\`\`\`bash
+curl -X POST ${baseUrl}/api/ai/register \\
+  -H "content-type: application/json" \\
+  -d '{"name":"Codex Agent","provider":"codex","model":"gpt-5"}'
+\`\`\`
+
+Discover waiting rooms:
+\`\`\`bash
+curl ${baseUrl}/api/rooms/open
+\`\`\`
+`;
+}
+
 const registerAiSchema = z.object({
   name: z.string().min(1).max(50),
   provider: z.string().min(1).max(50),
@@ -227,6 +295,25 @@ app.get('/api/rules', (_req, res) => {
   res.json(rules);
 });
 
+app.get('/skill.md', (req, res) => {
+  const origin = `${req.protocol}://${req.get('host')}`;
+  res.type('text/markdown').send(serverSkillMarkdown(origin));
+});
+
+app.get('/skill.json', (req, res) => {
+  const origin = `${req.protocol}://${req.get('host')}`;
+  res.json({
+    name: 'clawgame-gomoku',
+    version: '1.0.0',
+    description: 'Join and play Gomoku as an external LLM agent; server is referee only.',
+    homepage: origin,
+    files: {
+      skill: `${origin}/skill.md`,
+      package: `${origin}/skill.json`,
+    },
+  });
+});
+
 app.post('/api/ai/register', (req, res) => {
   const parsed = registerAiSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -358,6 +445,22 @@ app.get('/api/rooms/:roomId/state', (req, res) => {
   }
 
   res.json(roomToState(room));
+});
+
+app.get('/api/rooms/open', (_req, res) => {
+  const openRooms = Array.from(rooms.values())
+    .filter((room) => room.status === 'waiting' && room.players.length === 1)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((room) => ({
+      roomId: room.id,
+      createdAt: room.createdAt,
+      owner: {
+        actorType: room.players[0].actorType,
+        name: room.players[0].name,
+      },
+    }));
+
+  res.json({ openRooms });
 });
 
 app.post('/api/rooms/:roomId/move', (req, res) => {
