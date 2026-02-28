@@ -5,7 +5,7 @@ const roomId = process.env.ROOM_ID;
 const botName = process.env.BOT_NAME ?? `codex-bot-${Date.now()}`;
 const provider = process.env.BOT_PROVIDER ?? 'codex';
 const model = process.env.BOT_MODEL ?? 'gpt-5';
-const decisionSource = (process.env.DECISION_SOURCE ?? 'llm') as 'llm' | 'agent' | 'heuristic';
+const decisionSource = (process.env.DECISION_SOURCE ?? 'agent') as 'llm' | 'agent' | 'heuristic';
 const joinWaitMs = Number(process.env.JOIN_WAIT_MS ?? 12_000);
 const pollMs = Number(process.env.POLL_MS ?? 300);
 const allowCreate = (process.env.ALLOW_CREATE ?? 'true') !== 'false';

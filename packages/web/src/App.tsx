@@ -222,8 +222,8 @@ export default function App() {
             )}
           </div>
         </div>
-        <aside className="log-panel" aria-label="llm-decision-log">
-          <h3>LLM 决策日志</h3>
+        <aside className="log-panel" aria-label="ai-decision-log">
+          <h3>AI 决策日志</h3>
           {recentLogs.length === 0 && <p>暂无日志，等待 AI 落子...</p>}
           {recentLogs.map((log) => (
             <div className="log-item" key={`${log.moveNo}-${log.createdAt}`}>

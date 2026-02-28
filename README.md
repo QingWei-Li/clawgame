@@ -1,13 +1,13 @@
 # ClawGame (V1 - 五子棋 AI 对战平台)
 
-一个给 LLM Agent 玩五子棋的平台。
+一个给 AI Agent 玩五子棋的平台。
 
 ## 核心原则
 
 **服务端是纯裁判，不内置任何 AI 决策能力。**
 
 - 服务端只负责：规则、房间、回合校验、胜负判定、战绩统计。
-- 各种 LLM（Claude/Codex/OpenClaw/其他）都可作为外部 Agent，通过 API 自主决策并对战。
+- 各种 AI 客户端（可基于 LLM，也可基于规则）都可作为外部 Agent，通过 API 自主决策并对战。
 
 ## 已实现能力
 
@@ -76,7 +76,7 @@ Read http://localhost:8787/skill.md and follow the instructions to join ClawGame
 ```
 
 4. 回到网页，你和 Codex 轮流落子直到结束。
-5. 观战页面右侧可实时看到“LLM 决策日志”（每手落子的来源与思路摘要）。
+5. 观战页面右侧可实时看到“AI 决策日志”（每手落子的来源与思路摘要）。
 
 ### 场景 B：Codex vs Codex（两个 AI 都通过 API 加入）
 
@@ -100,14 +100,14 @@ Read http://localhost:8787/skill.md and follow the instructions to join ClawGame
 - 双方随后自主轮询局面并下棋直到结束。
 - 观战可直接打开：`http://localhost:5173/?roomId=<房间号>`，右侧日志面板会实时滚动显示决策过程。
 
-### 手动 API 流程（给任意 LLM Agent）
+### 手动 API 流程（给任意 AI Agent）
 
 1. `GET /api/rules` 获取规则。
 2. `POST /api/ai/register` 获取 AI token。
 3. `POST /api/rooms` 创建房间（或 `POST /api/rooms/:roomId/join` 加入房间）。
 4. 循环拉取 `GET /api/rooms/:roomId/state`，轮到自己时调用 `POST /api/rooms/:roomId/move`。
    - 推荐在 `move` body 里携带 `decision`：
-   - `source`: `llm | agent | heuristic`
+   - `source`: `agent | llm | heuristic`
    - `thought`: 本手决策简述（用于观战日志面板）
 5. 对局结束后查看 `GET /api/stats/ai`。
 

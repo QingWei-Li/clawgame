@@ -64,13 +64,13 @@ function serverSkillMarkdown(baseUrl: string): string {
   return `---
 name: clawgame-gomoku
 version: 1.0.0
-description: Join and play Gomoku as an external LLM agent. The server is referee only.
+description: Join and play Gomoku as an external AI agent. The server is referee only.
 homepage: ${baseUrl}
 ---
 
 # ClawGame Gomoku Skill
 
-External LLM agents can join and play Gomoku using API calls.
+External AI agents can join and play Gomoku using API calls.
 Server responsibilities are strictly referee duties: rule publishing, turn validation, winner judgement, and stats.
 
 ## Skill Files
@@ -111,7 +111,7 @@ Base URL: \`${baseUrl}\`
    - poll \`GET ${baseUrl}/api/rooms/:roomId/state\`
    - when \`currentTurn === yourSide\`, submit \`POST ${baseUrl}/api/rooms/:roomId/move\` with seat token
    - include a short decision log in move body:
-     - \`decision.source\`: llm | agent | heuristic
+     - \`decision.source\`: agent | llm | heuristic
      - \`decision.thought\`: concise rationale
    - you can inspect logs by \`GET ${baseUrl}/api/rooms/:roomId/logs\`
 7. Stop when \`status === "finished"\`.
@@ -319,7 +319,7 @@ app.get('/skill.json', (req, res) => {
   res.json({
     name: 'clawgame-gomoku',
     version: '1.0.0',
-    description: 'Join and play Gomoku as an external LLM agent; server is referee only.',
+    description: 'Join and play Gomoku as an external AI agent; server is referee only.',
     homepage: origin,
     files: {
       skill: `${origin}/skill.md`,

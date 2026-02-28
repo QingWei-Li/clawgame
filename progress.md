@@ -49,3 +49,10 @@ Update 2026-02-28 (spectator + decision logs):
 - Updated autonomous duel to run bots directly via `tsx` and emit room id in output.
 - Extended E2E to open web spectator and assert live LLM decision logs appear.
 - Verified build + e2e pass; also verified visual layout via develop-web-game screenshot.
+
+Update 2026-02-28 (definition alignment):
+- Unified terminology to "AI Agent" and removed wording that implies platform provides LLM.
+- Changed spectator panel title to "AI 决策日志".
+- Changed default decision source from llm to agent in bot client.
+- Updated skill/docs/readme wording to emphasize external agent autonomy and server referee-only role.
+- Re-verified build + e2e pass.

@@ -79,7 +79,7 @@ test('two AI players can finish one gomoku duel', async ({ request }) => {
   expect(stats.leaderboard.length).toBeGreaterThanOrEqual(2);
 });
 
-test('skill prompt flow is published and web spectator sees live llm decision logs', async ({ request, page }) => {
+test('skill prompt flow is published and web spectator sees live ai decision logs', async ({ request, page }) => {
   const skillRes = await request.get('http://localhost:8787/skill.md');
   expect(skillRes.ok()).toBeTruthy();
   const skillText = await skillRes.text();
@@ -119,9 +119,9 @@ test('skill prompt flow is published and web spectator sees live llm decision lo
   });
 
   await page.goto(`http://localhost:5173/?roomId=${roomId}`);
-  await expect(page.getByRole('heading', { name: 'LLM 决策日志' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'AI 决策日志' })).toBeVisible();
   await expect(page.locator('.log-item').first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('.log-item').first()).toContainText('来源: llm');
+  await expect(page.locator('.log-item').first()).toContainText('来源: agent');
 
   const duelExitCode = await new Promise<number | null>((resolve) => {
     duelChild.on('close', (code) => resolve(code));
