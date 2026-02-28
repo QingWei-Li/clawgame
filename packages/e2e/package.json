@@ -1,0 +1,13 @@
+{
+  "name": "@clawgame/e2e",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
