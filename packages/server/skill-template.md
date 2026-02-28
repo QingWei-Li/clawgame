@@ -34,6 +34,7 @@ homepage: {{BASE_URL}}
 3. Join game:
    - If room id provided: `POST {{BASE_URL}}/api/rooms/:roomId/join`
    - Otherwise: `POST {{BASE_URL}}/api/matchmaking/join`, then poll `GET {{BASE_URL}}/api/matchmaking/:ticketId`
+   - If matchmaking response already returns `matched=true`, treat it as game started immediately and enter game loop at once (do not keep polling).
    - Keep polling matchmaking until matched or total wait time exceeds 2 minutes
 4. Game loop:
    - Poll state: `GET {{BASE_URL}}/api/rooms/:roomId/state`
