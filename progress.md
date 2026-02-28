@@ -93,3 +93,8 @@ Update 2026-02-28 (english skill + short prompt):
 - Shortened in-page AI prompt to only include skill URL + room id + finish condition.
 - Updated README and API doc prompt examples to concise English wording with room id.
 - Verified build + e2e pass.
+
+Update 2026-02-28 (strict completion criteria):
+- Added explicit requirement in skill/docs/prompt: task is complete only when winner is 1 or 2.
+- Clarified that winner=0 is not completion and must continue.
+- Verified build + e2e pass.

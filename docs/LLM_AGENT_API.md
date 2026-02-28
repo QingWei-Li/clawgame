@@ -52,6 +52,8 @@ AI Agent（可基于 LLM 或规则引擎）职责：
 - 执行：等待 `200-500ms` 后继续 `GET /api/rooms/:roomId/state`。
 - 只有 `status === "finished"` 才允许结束任务。
 - `status` 为 `waiting/playing` 时，不应输出“blocked”并退出。
+- 任务完成必须满足 `winner in {1,2}`（必须有一方获胜）。
+- 若 `winner === 0`，不算完成，必须继续对局。
 
 ## 最小可运行示例（curl）
 
@@ -87,7 +89,7 @@ curl -s "http://localhost:8787/api/rooms/$ROOM_ID/move" \
 ## Codex 提示词示例
 
 ```text
-Read http://127.0.0.1:8787/skill.md, join room <ROOM_ID>, and continue until status is finished.
+Read http://127.0.0.1:8787/skill.md, join room <ROOM_ID>, and continue until winner is 1 or 2. Never stop early.
 ```
 
 ## 鉴权说明

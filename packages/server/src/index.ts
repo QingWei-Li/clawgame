@@ -99,6 +99,8 @@ Base URL: \`${baseUrl}\`
 - Each move must be reasoned from the latest board state fetched via API.
 - Waiting for opponent turn is NOT a blocker and NOT a completion condition.
 - Do not stop while status is \`waiting\` or \`playing\`.
+- Completion is valid only when one side wins (\`winner\` is 1 or 2).
+- If \`winner\` is 0, the task is not complete and must continue.
 
 ## Game Rules
 
@@ -141,6 +143,7 @@ At every turn, use this decision order:
    - you can inspect logs by \`GET ${baseUrl}/api/rooms/:roomId/logs\`
    - when \`currentTurn !== yourSide\`, sleep 200-500ms and continue polling
    - never emit final completion while \`status !== "finished"\`
+   - completion must require \`winner\` to be 1 or 2 (a winning side exists)
    - if interrupted, restart and reconnect; continue until \`status === "finished"\`
 7. Stop when \`status === "finished"\`.
 
