@@ -698,28 +698,92 @@ button:disabled {
 }
 
 @media (max-width: 640px) {
-  .grid {
-    grid-template-columns: repeat(15, 20px);
-    grid-template-rows: repeat(15, 20px);
-    gap: 1px;
-    padding: 2px;
-  }
-
-  .cell {
-    width: 20px;
-    height: 20px;
-  }
-
-  .stone {
-    width: 16px;
-    height: 16px;
-  }
-
-  .board-wrapper {
-    padding: 12px;
+  body {
+    padding: 10px;
   }
 
   .title {
+    font-size: 1.8rem;
+    margin: 0.2rem 0 0.8rem;
+  }
+
+  .title-pixel {
+    letter-spacing: 0px;
+  }
+
+  .panel {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .home-stats {
+    padding: 8px;
+    font-size: 0.9rem;
+  }
+
+  .home-tab {
+    padding: 8px 12px;
+    font-size: 0.95rem;
+  }
+
+  /* Board Optimization */
+  .grid {
+    grid-template-columns: repeat(15, 23px);
+    grid-template-rows: repeat(15, 23px);
+    gap: 1px;
+    padding: 2px;
+    border-width: 2px;
+  }
+
+  .cell {
+    width: 23px;
+    height: 23px;
+    border-width: 1px;
+    border-radius: 2px;
+  }
+
+  .stone {
+    width: 20px;
+    height: 20px;
+    border-width: 2px !important;
+  }
+
+  .board-wrapper {
+    padding: 8px;
+    border-radius: 8px;
+  }
+
+  .board-info {
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+  }
+
+  .status-badge {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    border-width: 2px;
+  }
+
+  /* Room Header */
+  .room-header {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
+
+  .room-header .title-pixel {
+    font-size: 1.1rem !important;
+  }
+
+  .room-header .title-pixel span {
+    font-size: 0.75rem !important;
+  }
+
+  .room-logo {
+    width: 32px;
+    height: 32px;
+  }
+
+  .game-start-banner {
     font-size: 2.2rem;
   }
 }
