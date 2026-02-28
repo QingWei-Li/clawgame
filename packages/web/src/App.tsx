@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check, Users, Shield, Bot, Play, ScrollText, Sun, Moon, Globe } from 'lucide-react';
 
@@ -10,6 +10,8 @@ type GameState = {
   status: Status;
   board: Cell[][];
   currentTurn: 1 | 2;
+  turnDeadlineAt: number | null;
+  turnTimeoutMs: number;
   winner: 0 | 1 | 2;
   finishReason: 'win' | 'draw_board_full' | 'opponent_timeout' | null;
   moves: number;
@@ -34,6 +36,56 @@ type LiveStats = {
 };
 
 const emptyBoard = () => Array.from({ length: 15 }, () => Array.from({ length: 15 }, () => 0 as Cell));
+const ROOM_SESSION_KEY_PREFIX = 'clawgame:room-session:';
+
+type RoomSession = {
+  seatToken: string;
+  mySide: 1 | 2;
+};
+
+const initialState: GameState = {
+  roomId: '',
+  status: 'waiting',
+  board: emptyBoard(),
+  currentTurn: 1,
+  turnDeadlineAt: null,
+  turnTimeoutMs: 0,
+  winner: 0,
+  finishReason: null,
+  moves: 0,
+  players: [],
+  lastMove: null,
+  decisionLogs: [],
+};
+
+function roomSessionKey(roomId: string): string {
+  return `${ROOM_SESSION_KEY_PREFIX}${roomId}`;
+}
+
+function saveRoomSession(roomId: string, seatToken: string, mySide: 1 | 2): void {
+  if (!roomId || !seatToken) return;
+  localStorage.setItem(roomSessionKey(roomId), JSON.stringify({ seatToken, mySide } as RoomSession));
+}
+
+function loadRoomSession(roomId: string): RoomSession | null {
+  if (!roomId) return null;
+  const raw = localStorage.getItem(roomSessionKey(roomId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as RoomSession;
+    if (!parsed?.seatToken || (parsed.mySide !== 1 && parsed.mySide !== 2)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearRoomSession(roomId: string): void {
+  if (!roomId) return;
+  localStorage.removeItem(roomSessionKey(roomId));
+}
 
 function normalizeRoomIdInput(value: string): string {
   const input = value.trim();
@@ -91,28 +143,17 @@ export default function App() {
   const [roomId, setRoomId] = useState('');
   const [seatToken, setSeatToken] = useState('');
   const [mySide, setMySide] = useState<0 | 1 | 2>(0);
-  const [state, setState] = useState<GameState>({
-    roomId: '',
-    status: 'waiting',
-    board: emptyBoard(),
-    currentTurn: 1,
-    winner: 0,
-    finishReason: null,
-    moves: 0,
-    players: [],
-    lastMove: null,
-    decisionLogs: [],
-  });
+  const [state, setState] = useState<GameState>(initialState);
   const [msg, setMsg] = useState('');
   const [copiedRoomPrompt, setCopiedRoomPrompt] = useState(false);
   const [copiedHomePrompt, setCopiedHomePrompt] = useState(false);
   const [liveStats, setLiveStats] = useState<LiveStats>({ activePlayers: 0, activeRooms: 0, waitingRooms: 0 });
   const [homeTab, setHomeTab] = useState<'agent' | 'human'>('agent');
+  const [nowTs, setNowTs] = useState(Date.now());
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') ||
       (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   });
-  const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -140,8 +181,28 @@ export default function App() {
     if (presetRoomId) {
       setRoomId(presetRoomId);
       setRoomInput(presetRoomId);
+      const savedSession = loadRoomSession(presetRoomId);
+      if (savedSession) {
+        setSeatToken(savedSession.seatToken);
+        setMySide(savedSession.mySide);
+        setMsg(t('messages.rejoinedGame'));
+      }
     }
-  }, []);
+  }, [t]);
+
+  useEffect(() => {
+    if (!roomId || !seatToken || (mySide !== 1 && mySide !== 2)) {
+      return;
+    }
+    saveRoomSession(roomId, seatToken, mySide);
+  }, [roomId, seatToken, mySide]);
+
+  useEffect(() => {
+    if (!roomId || state.status !== 'finished') {
+      return;
+    }
+    clearRoomSession(roomId);
+  }, [roomId, state.status]);
 
   useEffect(() => {
     const fetchLiveStats = async () => {
@@ -192,6 +253,14 @@ export default function App() {
   }, [roomId, websocketParseFailed]);
 
   useEffect(() => {
+    if (state.status !== 'playing') {
+      return;
+    }
+    const timer = setInterval(() => setNowTs(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [state.status, state.currentTurn, state.turnDeadlineAt]);
+
+  useEffect(() => {
     (window as any).render_game_to_text = () =>
       JSON.stringify({
         coordinate: 'origin top-left; x right+, y down+',
@@ -205,8 +274,25 @@ export default function App() {
   }, [roomId, state, mySide]);
 
   useEffect(() => {
-    // Intentionally removed auto scroll to allow users to read logs
-  }, [state.decisionLogs]);
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!roomId || state.status !== 'playing' || mySide === 0) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [roomId, state.status, mySide]);
+
+  function backToHome() {
+    syncRoomToUrl('');
+    setRoomId('');
+    setSeatToken('');
+    setMySide(0);
+    setState(initialState);
+    setMsg('');
+  }
 
   async function createRoom() {
     setMsg(t('messages.creating'));
@@ -220,6 +306,7 @@ export default function App() {
       setSeatToken(payload.seatToken);
       setMySide(payload.side);
       setState(payload.state);
+      saveRoomSession(payload.roomId, payload.seatToken, payload.side);
       setMsg('');
     } catch (e) {
       setMsg(`${t('messages.createFailed')}: ${(e as Error).message}`);
@@ -242,6 +329,7 @@ export default function App() {
       setSeatToken(payload.seatToken);
       setMySide(payload.side);
       setState(payload.state);
+      saveRoomSession(normalizedRoomId, payload.seatToken, payload.side);
       setMsg('');
     } catch (e) {
       setMsg(`${t('messages.joinFailed')}: ${(e as Error).message}`);
@@ -270,6 +358,7 @@ export default function App() {
         setSeatToken(payload.seatToken);
         setMySide(payload.side);
         setState(payload.state);
+        saveRoomSession(payload.roomId, payload.seatToken, payload.side);
         setMsg('');
       };
 
@@ -335,7 +424,18 @@ export default function App() {
     return '';
   }
 
+  function formatCountdown(ms: number): string {
+    const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
   const recentLogs = [...state.decisionLogs].slice(-100);
+  const turnRemainingMs =
+    state.status === 'playing' && state.turnDeadlineAt
+      ? Math.max(0, state.turnDeadlineAt - nowTs)
+      : 0;
   const homeAgentPrompt = t('prompts.home');
   const skillUrl = `${window.location.protocol}//${window.location.host}/skill.md`;
   const roomAgentPrompt = roomId
@@ -355,12 +455,13 @@ export default function App() {
   }
 
   const waitingForOpponent = state.players.length < 2 && state.status === 'waiting';
+  const isTwoHumans = state.players.length === 2 && state.players.every((p) => p.actorType === 'human');
 
   function renderHome() {
     return (
       <div className="home-container">
         <div className="home-card panel">
-          <h1 className="title">ClawGame</h1>
+          <h1 className="title" style={{ cursor: 'pointer' }} onClick={backToHome}>ClawGame</h1>
           <p style={{ textAlign: 'center', color: '#94a3b8', marginBottom: '2rem' }}>
             {t('app.tagline')}
           </p>
@@ -464,7 +565,14 @@ export default function App() {
       <div style={{ width: '100%' }}>
         <div className="room-header">
           <h2 style={{ margin: 0 }}>
-            <span style={{ color: '#38bdf8' }}>Claw</span>{t('room.roomArenaSuffix')}
+            <span
+              style={{ color: '#38bdf8', cursor: 'pointer' }}
+              onClick={backToHome}
+              title={t('room.backHome')}
+            >
+              Claw
+            </span>
+            {t('room.roomArenaSuffix')}
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontWeight: 'bold' }}>ID:</span>
@@ -505,7 +613,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="game-container">
+        <div className={`game-container ${isTwoHumans ? 'centered' : ''}`}>
           <div className="board-wrapper">
             <div className="board-info">
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -516,8 +624,18 @@ export default function App() {
                   {t('room.currentTurn')}: {state.currentTurn === 1 ? t('room.blackFirst') : t('room.white')}
                 </span>
               </div>
-              <div>{t('room.moveCount')}: {state.moves}</div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span>{t('room.moveCount')}: {state.moves}</span>
+                {state.status === 'playing' && (
+                  <span>{t('room.turnCountdown')}: {formatCountdown(turnRemainingMs)}</span>
+                )}
+              </div>
             </div>
+            {state.status === 'playing' && mySide !== 0 && (
+              <div style={{ marginBottom: '12px', fontSize: '0.9rem', color: '#f59e0b' }}>
+                {t('room.leaveGameWarning')}
+              </div>
+            )}
 
             <div style={{ marginBottom: '16px', color: '#e2e8f0', display: 'flex', justifyContent: 'center', gap: '24px' }}>
               {state.players.length === 0 ? (
@@ -527,7 +645,7 @@ export default function App() {
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Shield size={16} color={p.side === 1 ? '#94a3b8' : '#f8fafc'} />
                     <span style={{ fontWeight: state.currentTurn === p.side ? 'bold' : 'normal', color: state.currentTurn === p.side ? '#38bdf8' : 'inherit' }}>
-                      {p.side === 1 ? t('room.side.blackShort') : t('room.side.whiteShort')}: {p.name} {p.actorType === 'agent' && <Bot size={14} style={{ display: 'inline', marginLeft: 4 }} />}
+                      {p.side === 1 ? t('room.side.blackShort') : t('room.side.whiteShort')}: {p.name} {p.actorType !== 'human' && <Bot size={14} style={{ display: 'inline', marginLeft: 4 }} />}
                     </span>
                   </div>
                 ))
@@ -575,28 +693,29 @@ export default function App() {
             {msg && <p style={{ color: '#ef4444', textAlign: 'center', marginTop: '1rem' }}>{msg}</p>}
           </div>
 
-          <div className="log-panel panel">
-            <div className="log-header">
-              <ScrollText size={20} color="#38bdf8" />
-              <h3>{t('room.agentDecisionLogs')}</h3>
-            </div>
-            <div className="log-content">
-              {recentLogs.length === 0 ? (
-                <p style={{ color: '#64748b', textAlign: 'center', marginTop: '2rem' }}>{t('room.noLogs')}</p>
-              ) : (
-                recentLogs.map((log) => (
-                  <div className="log-item" key={`${log.moveNo}-${log.createdAt}`}>
-                    <div className="log-meta">
-                      <span>#{log.moveNo} {log.side === 1 ? t('room.side.blackShort') : t('room.side.whiteShort')}({log.playerName})</span>
-                      <span>({log.x}, {log.y}) - {log.source}</span>
+          {!isTwoHumans && (
+            <div className="log-panel panel">
+              <div className="log-header">
+                <ScrollText size={20} color="#38bdf8" />
+                <h3>{t('room.agentDecisionLogs')}</h3>
+              </div>
+              <div className="log-content">
+                {recentLogs.length === 0 ? (
+                  <p style={{ color: '#64748b', textAlign: 'center', marginTop: '2rem' }}>{t('room.noLogs')}</p>
+                ) : (
+                  recentLogs.map((log) => (
+                    <div className="log-item" key={`${log.moveNo}-${log.createdAt}`}>
+                      <div className="log-meta">
+                        <span>#{log.moveNo} {log.side === 1 ? t('room.side.blackShort') : t('room.side.whiteShort')}({log.playerName})</span>
+                        <span>({log.x}, {log.y}) - {log.source}</span>
+                      </div>
+                      <div className="log-text">{log.thought}</div>
                     </div>
-                    <div className="log-text">{log.thought}</div>
-                  </div>
-                ))
-              )}
-              <div ref={logEndRef} />
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     );

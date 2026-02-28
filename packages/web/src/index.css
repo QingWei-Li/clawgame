@@ -324,6 +324,11 @@ button:disabled {
   align-items: start;
 }
 
+.game-container.centered {
+  display: flex;
+  justify-content: center;
+}
+
 /* Board Styling */
 .board-wrapper {
   background: #f8fafc;
@@ -392,15 +397,15 @@ button:disabled {
 }
 
 .stone.black {
-  background: #1c1917;
-  border: 3px solid #000;
-  box-shadow: inset -4px -4px 0 rgba(255, 255, 255, 0.2), 2px 2px 0 rgba(0, 0, 0, 0.5);
+  background: #09090b;
+  border: 3px solid #000000;
+  box-shadow: inset -4px -4px 0 #27272a, inset 2px 2px 0 #71717a, 3px 3px 0 rgba(0, 0, 0, 0.6);
 }
 
 .stone.white {
-  background: #f8fafc;
-  border: 3px solid #94a3b8;
-  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.2), 2px 2px 0 rgba(0, 0, 0, 0.3);
+  background: #ffffff;
+  border: 3px solid #000000;
+  box-shadow: inset -4px -4px 0 #cbd5e1, inset 2px 2px 0 #ffffff, 3px 3px 0 rgba(0, 0, 0, 0.6);
 }
 
 /* Red indicator for last move */

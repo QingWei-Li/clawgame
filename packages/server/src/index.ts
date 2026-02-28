@@ -80,11 +80,10 @@ const rooms = new Map<string, Room>();
 const agentByToken = new Map<string, AgentIdentity>();
 const agentById = new Map<string, AgentIdentity>();
 const seatTokenIndex = new Map<string, { roomId: string; side: PlayerSide }>();
-const TURN_TIMEOUT_MS = 60_000;
+const TURN_TIMEOUT_MS = 120_000;
 const FINISHED_ROOM_TTL_MS = Number(process.env.FINISHED_ROOM_TTL_MS ?? 30_000);
 const AGENT_HISTORY_LIMIT = Number(process.env.AGENT_HISTORY_LIMIT ?? 200);
 const roomCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const matchmakingQueue: MatchRequest[] = [];
 const waitingByTicket = new Map<string, MatchRequest>();
 const assignmentByTicket = new Map<string, MatchAssignment>();
 const agentHistoryById = new Map<string, AgentMatchHistoryEntry[]>();
@@ -159,7 +158,7 @@ Base URL: \`${baseUrl}\`
 - Completion is valid only if one of these is true:
   - game finished by win
   - board is full
-  - opponent timed out for more than 60 seconds on their turn
+  - opponent timed out for more than 120 seconds on their turn
 
 ## Game Rules
 
@@ -271,11 +270,18 @@ function boardEmpty(): Cell[][] {
 }
 
 function roomToState(room: Room): GameState {
+  const turnDeadlineAt =
+    room.status === 'playing'
+      ? (room.lastActiveAt[room.currentTurn] ?? room.createdAt) + TURN_TIMEOUT_MS
+      : null;
+
   return {
     roomId: room.id,
     status: room.status,
     board: room.board,
     currentTurn: room.currentTurn,
+    turnDeadlineAt,
+    turnTimeoutMs: TURN_TIMEOUT_MS,
     winner: room.winner,
     finishReason: room.finishReason,
     moves: room.moves,
@@ -362,13 +368,6 @@ function createRoomWithPlayers(left: MatchRequest, right: MatchRequest): { room:
   return { room, leftSeat, rightSeat };
 }
 
-function removeMatchRequestFromQueue(ticketId: string) {
-  const idx = matchmakingQueue.findIndex((entry) => entry.actorId === waitingByTicket.get(ticketId)?.actorId);
-  if (idx >= 0) {
-    matchmakingQueue.splice(idx, 1);
-  }
-}
-
 function assignMatch(leftTicketId: string, rightTicketId: string) {
   const left = waitingByTicket.get(leftTicketId);
   const right = waitingByTicket.get(rightTicketId);
@@ -394,8 +393,6 @@ function assignMatch(leftTicketId: string, rightTicketId: string) {
   });
   waitingByTicket.delete(leftTicketId);
   waitingByTicket.delete(rightTicketId);
-  removeMatchRequestFromQueue(leftTicketId);
-  removeMatchRequestFromQueue(rightTicketId);
   broadcastRoom(room.id, { type: 'state', state });
 }
 
@@ -777,7 +774,6 @@ app.post('/api/matchmaking/join', (req, res) => {
     .find(([candidateTicketId, candidate]) => candidateTicketId !== ticketId && candidate.actorId !== me.actorId)?.[0];
 
   if (!opponentTicketId) {
-    matchmakingQueue.push(me);
     res.status(202).json({ matched: false, ticketId });
     return;
   }
