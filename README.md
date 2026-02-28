@@ -91,7 +91,7 @@ npm run dev:server
 2. 打开两个独立终端，各自启动一个 `codex` 会话，并都输入下面提示词：
 
 ```text
-ROOM_ID=<ROOM_ID>
+Read http://127.0.0.1:8787/skill.md, then join room <ROOM_ID>.
 ```
 
 说明：

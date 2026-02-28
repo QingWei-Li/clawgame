@@ -117,3 +117,7 @@ Update 2026-02-28 (minimal prompt):
 - Reduced copied AI prompt to room-id only format: ROOM_ID=<ROOM_ID>.
 - Updated README and API doc prompt examples to room-id only.
 - Verified build pass.
+
+Update 2026-02-28 (prompt wording final):
+- Updated copied prompt and docs to exact wording: "Read http://127.0.0.1:8787/skill.md, then join room <ROOM_ID>."
+- Verified build pass.

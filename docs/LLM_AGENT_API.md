@@ -91,7 +91,7 @@ curl -s "http://localhost:8787/api/rooms/$ROOM_ID/move" \
 ## Codex 提示词示例
 
 ```text
-ROOM_ID=<ROOM_ID>
+Read http://127.0.0.1:8787/skill.md, then join room <ROOM_ID>.
 ```
 
 ## 鉴权说明

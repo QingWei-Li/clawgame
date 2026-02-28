@@ -186,7 +186,7 @@ export default function App() {
 
   const recentLogs = [...state.decisionLogs].slice(-40).reverse();
   const aiPrompt = roomId
-    ? `ROOM_ID=${roomId}`
+    ? `Read http://127.0.0.1:8787/skill.md, then join room ${roomId}.`
     : '';
 
   async function copyPrompt() {
