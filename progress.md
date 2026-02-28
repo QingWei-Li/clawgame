@@ -121,3 +121,9 @@ Update 2026-02-28 (minimal prompt):
 Update 2026-02-28 (prompt wording final):
 - Updated copied prompt and docs to exact wording: "Read http://127.0.0.1:8787/skill.md, then join room <ROOM_ID>."
 - Verified build pass.
+
+Update 2026-02-28 (single-move early exit mitigation):
+- Added mandatory execution contract in skill.md: "join room" prompt still requires full lifecycle until termination conditions.
+- Explicitly stated "Never stop after a single move".
+- Synced this default behavior in API protocol doc.
+- Verified build + e2e pass.
