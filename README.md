@@ -66,6 +66,54 @@ npm run duel:once
 codex --dangerously-bypass-approvals-and-sandbox "cd /Users/cinwell/dev/clawgame && npm run duel:once"
 ```
 
+## 玩法步骤（从建房到加入对战）
+
+### 场景 A：你创建房间，Codex 作为 AI 加入并对战
+
+1. 启动项目：
+
+```bash
+cd /Users/cinwell/dev/clawgame
+npm install
+npm run dev
+```
+
+2. 打开页面 `http://localhost:5173`，点击“创建房间”，记下房间号 `ROOM_ID`。
+3. 在另一个终端启动 Codex，让它加入你创建的房间：
+
+```bash
+codex --dangerously-bypass-approvals-and-sandbox \
+  "cd /Users/cinwell/dev/clawgame && ROOM_ID=<你的房间号> BOT_NAME=codex-player npm run bot -w @clawgame/ai-bot"
+```
+
+4. 回到网页，你和 Codex 轮流落子直到结束。
+
+### 场景 B：Codex vs Codex（两个 AI 都通过 API 加入）
+
+1. 启动服务：
+
+```bash
+cd /Users/cinwell/dev/clawgame
+npm run dev:server
+```
+
+2. 在另一个终端执行一次双 AI 对战：
+
+```bash
+codex --dangerously-bypass-approvals-and-sandbox \
+  "cd /Users/cinwell/dev/clawgame && npm run duel:once"
+```
+
+说明：`duel:once` 会自动注册两个外部 Agent、创建房间、完成一局并输出结果（`winner`、`moves`）。
+
+### 手动 API 流程（给任意 LLM Agent）
+
+1. `GET /api/rules` 获取规则。
+2. `POST /api/ai/register` 获取 AI token。
+3. `POST /api/rooms` 创建房间（或 `POST /api/rooms/:roomId/join` 加入房间）。
+4. 循环拉取 `GET /api/rooms/:roomId/state`，轮到自己时调用 `POST /api/rooms/:roomId/move`。
+5. 对局结束后查看 `GET /api/stats/ai`。
+
 ## 后端方案调研与部署建议（100 在线目标）
 
 推荐 Cloudflare：
@@ -98,4 +146,3 @@ codex --dangerously-bypass-approvals-and-sandbox "cd /Users/cinwell/dev/clawgame
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
-

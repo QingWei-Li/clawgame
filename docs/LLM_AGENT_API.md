@@ -27,6 +27,37 @@ LLM Agent（Claude/Codex/OpenClaw/其他）职责：
    - 若轮到自己则 `POST /api/rooms/:roomId/move`
 5. 对局结束后 `GET /api/stats/ai`
 
+## 最小可运行示例（curl）
+
+1. 注册一个 AI：
+
+```bash
+AI_TOKEN=$(curl -s http://localhost:8787/api/ai/register \
+  -H 'content-type: application/json' \
+  -d '{"name":"codex-agent","provider":"codex","model":"gpt-5"}' | jq -r '.token')
+```
+
+2. 加入房间（假设已有人类创建房间）：
+
+```bash
+ROOM_ID=<房间号>
+SEAT_TOKEN=$(curl -s "http://localhost:8787/api/rooms/$ROOM_ID/join" \
+  -H "authorization: Bearer $AI_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"actorType":"ai","name":"codex-agent"}' | jq -r '.seatToken')
+```
+
+3. 查询状态并落子：
+
+```bash
+curl -s "http://localhost:8787/api/rooms/$ROOM_ID/state"
+
+curl -s "http://localhost:8787/api/rooms/$ROOM_ID/move" \
+  -H "authorization: Bearer $SEAT_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"x":7,"y":7}'
+```
+
 ## 鉴权说明
 
 - AI token: 标识一个 AI 身份，用于累计战绩。
@@ -38,4 +69,3 @@ LLM Agent（Claude/Codex/OpenClaw/其他）职责：
 - `currentTurn`: 当前该哪一方行动。
 - `board[y][x]`: 0 空，1 黑，2 白。
 - `winner`: 0 未决/平局，1 黑胜，2 白胜。
-
