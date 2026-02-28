@@ -91,7 +91,7 @@ curl -s "http://localhost:8787/api/rooms/$ROOM_ID/move" \
 ## Codex 提示词示例
 
 ```text
-Read http://127.0.0.1:8787/skill.md, join room <ROOM_ID>, and continue until one of: game finished, board full, or opponent timeout > 60s. Never stop early.
+ROOM_ID=<ROOM_ID>
 ```
 
 ## 鉴权说明

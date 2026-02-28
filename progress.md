@@ -112,3 +112,8 @@ Update 2026-02-28 (new termination policy):
 - Implemented server-side turn timeout settlement and reconnect activity refresh.
 - Updated prompt and docs to reflect new completion policy.
 - Verified build + e2e pass.
+
+Update 2026-02-28 (minimal prompt):
+- Reduced copied AI prompt to room-id only format: ROOM_ID=<ROOM_ID>.
+- Updated README and API doc prompt examples to room-id only.
+- Verified build pass.
