@@ -29,7 +29,17 @@ async function jsonRequest<T>(path: string, init?: RequestInit): Promise<{ statu
 }
 
 beforeAll(async () => {
-  serverProc = spawn('npx', ['wrangler', 'dev', '--local', '--config', 'wrangler.toml', '--port', String(port)], {
+  serverProc = spawn('npx', [
+    'wrangler',
+    'dev',
+    '--local',
+    '--config',
+    'wrangler.toml',
+    '--port',
+    String(port),
+    '--var',
+    'TURN_TIMEOUT_MS:5000',
+  ], {
     cwd: process.cwd(),
     env: { ...process.env },
     stdio: 'pipe',
@@ -230,7 +240,7 @@ describe.sequential('server api coverage', () => {
     }
   });
 
-  it('resets turn timer to 2 minutes at game start and on each turn switch', async () => {
+  it('resets turn timer at game start and on each turn switch', async () => {
     const hostToken = `timer-host-${Date.now()}`;
     const guestToken = `timer-guest-${Date.now()}`;
 
@@ -254,12 +264,13 @@ describe.sequential('server api coverage', () => {
     expect(join.status).toBe(201);
     expect(join.data.state.currentTurn).toBe(1);
     expect(join.data.state.turnDeadlineAt).not.toBeNull();
+    const timeoutMs = join.data.state.turnTimeoutMs;
     const startRemaining = (join.data.state.turnDeadlineAt as number) - Date.now();
-    expect(startRemaining).toBeGreaterThan(119_000);
+    expect(startRemaining).toBeGreaterThan(timeoutMs - 1_000);
 
     await delay(2200);
 
-    const hostMove = await jsonRequest<{ currentTurn: number; turnDeadlineAt: number | null }>(
+    const hostMove = await jsonRequest<{ currentTurn: number; turnDeadlineAt: number | null; turnTimeoutMs: number }>(
       `/api/rooms/${create.data.roomId}/move`,
       {
         method: 'POST',
@@ -271,6 +282,34 @@ describe.sequential('server api coverage', () => {
     expect(hostMove.data.currentTurn).toBe(2);
     expect(hostMove.data.turnDeadlineAt).not.toBeNull();
     const switchedRemaining = (hostMove.data.turnDeadlineAt as number) - Date.now();
-    expect(switchedRemaining).toBeGreaterThan(119_000);
+    expect(switchedRemaining).toBeGreaterThan(timeoutMs - 1_000);
+  }, 15_000);
+
+  it('live stats should not count timed-out rooms as active', async () => {
+    const hostToken = `live-host-${Date.now()}`;
+    const guestToken = `live-guest-${Date.now()}`;
+
+    const create = await jsonRequest<{ roomId: string; seatToken: string }>('/api/rooms', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actorType: 'human', name: 'live-host', clientToken: hostToken }),
+    });
+    expect(create.status).toBe(201);
+
+    const join = await jsonRequest<{ seatToken: string; side: number }>(`/api/rooms/${create.data.roomId}/join`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actorType: 'human', name: 'live-guest', clientToken: guestToken }),
+    });
+    expect(join.status).toBe(201);
+
+    await delay(5_500);
+
+    const live = await jsonRequest<{ activePlayers: number; activeRooms: number; waitingRooms: number }>('/api/stats/live');
+    expect(live.status).toBe(200);
+
+    const active = await jsonRequest<{ activeRooms: Array<{ roomId: string; status: string }> }>('/api/rooms/active');
+    expect(active.status).toBe(200);
+    expect(active.data.activeRooms.some((room) => room.roomId === create.data.roomId)).toBe(false);
   }, 15_000);
 });

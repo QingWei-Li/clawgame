@@ -14,6 +14,7 @@ import {
 type Env = {
   LOBBY: DurableObjectNamespace;
   PUBLIC_BASE_URL?: string;
+  TURN_TIMEOUT_MS?: string;
   FINISHED_ROOM_TTL_MS?: string;
   WAITING_ROOM_TTL_MS?: string;
   AGENT_HISTORY_LIMIT?: string;
@@ -76,10 +77,12 @@ type AgentMatchHistoryEntry = {
   finishedAt: number;
 };
 
-const TURN_TIMEOUT_MS = 120_000;
+const DEFAULT_TURN_TIMEOUT_MS = 120_000;
 const DEFAULT_FINISHED_ROOM_TTL_MS = 30_000;
 const DEFAULT_WAITING_ROOM_TTL_MS = 300_000;
 const DEFAULT_AGENT_HISTORY_LIMIT = 200;
+const AGENT_ID_KEY_PREFIX = 'agent:id:';
+const AGENT_HISTORY_KEY_PREFIX = 'agent:history:';
 
 const rules: RulesResponse = {
   game: 'gomoku',
@@ -220,8 +223,8 @@ function getPublicBaseUrl(req: Request, env: Env): string {
   return normalizeBaseUrl(`${url.protocol}//${url.host}`);
 }
 
-function serverSkillMarkdown(baseUrl: string): string {
-  const turnTimeoutSeconds = Math.floor(TURN_TIMEOUT_MS / 1000);
+function serverSkillMarkdown(baseUrl: string, turnTimeoutMs: number): string {
+  const turnTimeoutSeconds = Math.floor(turnTimeoutMs / 1000);
   return SKILL_TEMPLATE_RAW
     .replaceAll('{{BASE_URL}}', baseUrl)
     .replaceAll('{{BOARD_SIZE}}', String(BOARD_SIZE))
@@ -289,14 +292,63 @@ export class LobbyDO {
   private assignmentByTicket = new Map<string, MatchAssignment>();
   private agentHistoryById = new Map<string, AgentMatchHistoryEntry[]>();
   private socketsByRoom = new Map<string, Set<WebSocket>>();
+  private readonly ready: Promise<void>;
 
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Env,
-  ) {}
+  ) {
+    this.ready = this.state.blockConcurrencyWhile(async () => {
+      await this.loadPersistedAgents();
+    });
+  }
+
+  private agentIdentityKey(agentId: string): string {
+    return `${AGENT_ID_KEY_PREFIX}${agentId}`;
+  }
+
+  private agentHistoryKey(agentId: string): string {
+    return `${AGENT_HISTORY_KEY_PREFIX}${agentId}`;
+  }
+
+  private async loadPersistedAgents(): Promise<void> {
+    const persistedAgents = await this.state.storage.list<AgentIdentity>({ prefix: AGENT_ID_KEY_PREFIX });
+    this.agentById.clear();
+    this.agentByToken.clear();
+    for (const agent of persistedAgents.values()) {
+      this.agentById.set(agent.id, agent);
+      this.agentByToken.set(agent.token, agent);
+    }
+
+    const persistedHistories = await this.state.storage.list<AgentMatchHistoryEntry[]>({ prefix: AGENT_HISTORY_KEY_PREFIX });
+    this.agentHistoryById.clear();
+    for (const [key, history] of persistedHistories.entries()) {
+      const agentId = key.slice(AGENT_HISTORY_KEY_PREFIX.length);
+      this.agentHistoryById.set(agentId, history);
+    }
+
+    for (const agentId of this.agentById.keys()) {
+      if (!this.agentHistoryById.has(agentId)) {
+        this.agentHistoryById.set(agentId, []);
+      }
+    }
+  }
+
+  private async persistAgent(agent: AgentIdentity): Promise<void> {
+    await this.state.storage.put(this.agentIdentityKey(agent.id), agent);
+  }
+
+  private async persistAgentHistory(agentId: string): Promise<void> {
+    const history = this.agentHistoryById.get(agentId) ?? [];
+    await this.state.storage.put(this.agentHistoryKey(agentId), history);
+  }
 
   private finishedRoomTtlMs(): number {
     return Number(this.env.FINISHED_ROOM_TTL_MS ?? DEFAULT_FINISHED_ROOM_TTL_MS);
+  }
+
+  private turnTimeoutMs(): number {
+    return Number(this.env.TURN_TIMEOUT_MS ?? DEFAULT_TURN_TIMEOUT_MS);
   }
 
   private waitingRoomTtlMs(): number {
@@ -308,9 +360,10 @@ export class LobbyDO {
   }
 
   private roomToState(room: Room): GameState {
+    const turnTimeoutMs = this.turnTimeoutMs();
     const turnDeadlineAt =
       room.status === 'playing'
-        ? (room.lastActiveAt[room.currentTurn] ?? room.createdAt) + TURN_TIMEOUT_MS
+        ? (room.lastActiveAt[room.currentTurn] ?? room.createdAt) + turnTimeoutMs
         : null;
 
     return {
@@ -319,7 +372,7 @@ export class LobbyDO {
       board: room.board,
       currentTurn: room.currentTurn,
       turnDeadlineAt,
-      turnTimeoutMs: TURN_TIMEOUT_MS,
+      turnTimeoutMs,
       winner: room.winner,
       finishReason: room.finishReason,
       moves: room.moves,
@@ -591,23 +644,29 @@ export class LobbyDO {
     }
   }
 
-  private settleTurnTimeout(room: Room): void {
+  private async settleTurnTimeout(room: Room): Promise<void> {
     if (room.status !== 'playing') {
       return;
     }
     const now = Date.now();
     const currentSide = room.currentTurn;
     const currentLastActive = room.lastActiveAt[currentSide] ?? room.createdAt;
-    if (now - currentLastActive <= TURN_TIMEOUT_MS) {
+    if (now - currentLastActive <= this.turnTimeoutMs()) {
       return;
     }
 
     room.status = 'finished';
     room.winner = currentSide === 1 ? 2 : 1;
     room.finishReason = 'opponent_timeout';
-    this.settleAgentStats(room);
+    await this.settleAgentStats(room);
     this.scheduleFinishedRoomRecycle(room);
     this.broadcastRoom(room.id, { type: 'state', state: this.roomToState(room) });
+  }
+
+  private async settleAllTurnTimeouts(): Promise<void> {
+    for (const room of this.rooms.values()) {
+      await this.settleTurnTimeout(room);
+    }
   }
 
   private broadcastRoom(roomId: string, payload: unknown): void {
@@ -626,7 +685,7 @@ export class LobbyDO {
     }
   }
 
-  private settleAgentStats(room: Room): void {
+  private async settleAgentStats(room: Room): Promise<void> {
     if (room.status !== 'finished') {
       return;
     }
@@ -678,6 +737,8 @@ export class LobbyDO {
         history.splice(0, history.length - this.agentHistoryLimit());
       }
       this.agentHistoryById.set(agent.id, history);
+      await this.persistAgent(agent);
+      await this.persistAgentHistory(agent.id);
     }
   }
 
@@ -726,6 +787,7 @@ export class LobbyDO {
     if (req.method === 'OPTIONS') {
       return optionsResponse();
     }
+    await this.ready;
 
     this.cleanupStaleWaitingRooms();
 
@@ -741,6 +803,7 @@ export class LobbyDO {
     }
 
     if (req.method === 'GET' && pathname === '/api/stats/live') {
+      await this.settleAllTurnTimeouts();
       const activeRooms = Array.from(this.rooms.values()).filter((room) =>
         room.status === 'waiting' || room.status === 'playing',
       );
@@ -755,7 +818,7 @@ export class LobbyDO {
 
     if (req.method === 'GET' && pathname === '/skill.md') {
       const baseUrl = getPublicBaseUrl(req, this.env);
-      return text(serverSkillMarkdown(baseUrl), 'text/markdown; charset=utf-8');
+      return text(serverSkillMarkdown(baseUrl, this.turnTimeoutMs()), 'text/markdown; charset=utf-8');
     }
 
     if (req.method === 'GET' && pathname === '/skill.json') {
@@ -795,6 +858,8 @@ export class LobbyDO {
       this.agentByToken.set(agent.token, agent);
       this.agentById.set(agent.id, agent);
       this.agentHistoryById.set(agent.id, []);
+      await this.persistAgent(agent);
+      await this.persistAgentHistory(agent.id);
 
       return json({ token: agent.token, profile: agent }, 201);
     }
@@ -1130,7 +1195,7 @@ export class LobbyDO {
         return json({ error: 'room not found' }, 404);
       }
 
-      this.settleTurnTimeout(room);
+      await this.settleTurnTimeout(room);
       return json(this.roomToState(room));
     }
 
@@ -1161,6 +1226,7 @@ export class LobbyDO {
     }
 
     if (req.method === 'GET' && pathname === '/api/rooms/active') {
+      await this.settleAllTurnTimeouts();
       const activeRooms = Array.from(this.rooms.values())
         .filter((room) => room.status === 'waiting' || room.status === 'playing')
         .map((room) => ({
@@ -1195,7 +1261,7 @@ export class LobbyDO {
         return json({ error: 'room not found' }, 404);
       }
 
-      this.settleTurnTimeout(room);
+      await this.settleTurnTimeout(room);
       if (room.status !== 'playing') {
         return json({ error: 'game not in playing status' }, 409);
       }
@@ -1232,13 +1298,13 @@ export class LobbyDO {
         room.status = 'finished';
         room.winner = seat.side;
         room.finishReason = 'win';
-        this.settleAgentStats(room);
+        await this.settleAgentStats(room);
         this.scheduleFinishedRoomRecycle(room);
       } else if (room.moves >= BOARD_SIZE * BOARD_SIZE) {
         room.status = 'finished';
         room.winner = 0;
         room.finishReason = 'draw_board_full';
-        this.settleAgentStats(room);
+        await this.settleAgentStats(room);
         this.scheduleFinishedRoomRecycle(room);
       } else {
         room.currentTurn = room.currentTurn === 1 ? 2 : 1;
