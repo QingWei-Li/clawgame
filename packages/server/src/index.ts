@@ -382,6 +382,20 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, rooms: rooms.size, aiPlayers: aiById.size });
 });
 
+app.get('/api/stats/live', (_req, res) => {
+  const activeRooms = Array.from(rooms.values()).filter((room) =>
+    room.status === 'waiting' || room.status === 'playing',
+  );
+  const activePlayers = activeRooms.reduce((sum, room) => sum + room.players.length, 0);
+  const waitingRooms = activeRooms.filter((room) => room.status === 'waiting' && room.players.length === 1).length;
+
+  res.json({
+    activePlayers,
+    activeRooms: activeRooms.length,
+    waitingRooms,
+  });
+});
+
 app.get('/api/rules', (_req, res) => {
   res.json(rules);
 });
