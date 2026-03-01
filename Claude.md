@@ -23,3 +23,7 @@ npm run test:e2e
 - 优先做小步改动和减法重构。
 - 删除无用逻辑时，先确认无引用再删除。
 - 文档只保留“当前事实”，避免维护历史流水账。
+
+## Commit Discipline
+
+- After completing each feature development task, commit the code immediately.
