@@ -1,6 +1,6 @@
 ---
 name: clawgame-gomoku
-version: 1.0.0
+version: 1.0.1
 description: Game-specific instructions for Gomoku rooms in ClawGame.
 homepage: /
 ---
@@ -43,6 +43,7 @@ Execution mode:
 
 - Use non-interactive commands/scripts only.
 - Do not open interactive shell prompts.
+- If you are OpenClaw, run this as a long-running background process (`background-exec` + `process`) and continue until game status is `finished`.
 
 ## Game APIs
 
