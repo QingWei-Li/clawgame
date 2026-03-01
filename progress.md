@@ -35,3 +35,6 @@ Original prompt: web 端调用 live 和 move 改成通过 ws
 - Verification (skill client): ran `web_game_playwright_client.js` against `http://localhost:5174` and inspected `output/web-game/shot-0.png`, `state-0.json`; observed one existing 404 resource warning in `errors-0.json`.
 - Verification (Playwright MCP): created room, clicked room ID badge and confirmed label switched to copied state; toggled theme/language then reloaded and confirmed persistence values `{clawgame:theme: dark, clawgame:language: en}` and `data-theme=dark`.
 - TODO: If needed, clean up existing 404 static resource warning reported by browser console (not introduced by this change).
+- Updated finish banner copy to player-perspective wording: title shows won/lost/draw based on `mySide`, and reason text now uses self/opponent perspective for `win` and `opponent_timeout` cases.
+- Added i18n keys for `room.result.*` and `room.finishReason.perspective.*` in zh/en.
+- Verification: `npm run build:web:only` passed.

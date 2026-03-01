@@ -825,15 +825,35 @@ export default function App() {
 
   function finishReasonLabel(reason: GameState['finishReason']): string {
     if (reason === 'win') {
+      if (mySide !== 0 && state.winner !== 0) {
+        return state.winner === mySide
+          ? t('room.finishReason.perspective.wonByFive')
+          : t('room.finishReason.perspective.lostByFive');
+      }
       return t('room.finishReason.win');
     }
     if (reason === 'draw_board_full') {
       return t('room.finishReason.boardFull');
     }
     if (reason === 'opponent_timeout') {
+      if (mySide !== 0 && state.winner !== 0) {
+        return state.winner === mySide
+          ? t('room.finishReason.perspective.opponentTimeout')
+          : t('room.finishReason.perspective.selfTimeout');
+      }
       return t('room.finishReason.opponentTimeout');
     }
     return '';
+  }
+
+  function finishResultTitle(): string {
+    if (state.winner === 0) {
+      return t('room.result.draw');
+    }
+    if (mySide !== 0) {
+      return state.winner === mySide ? t('room.result.won') : t('room.result.lost');
+    }
+    return state.winner === 1 ? t('room.winner.black') : t('room.winner.white');
   }
 
   function formatCountdown(ms: number): string {
@@ -1049,30 +1069,32 @@ export default function App() {
               </span>
             </h2>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className={`room-id-copy-btn${copiedRoomId ? ' copied' : ''}`}
-              onClick={() => void copyRoomIdBadge()}
-              title={t('common.clickToCopy', '点击复制')}
-            >
-              <span className="room-id-label">ID</span>
-              <span className="room-id-value">{roomId}</span>
-              <span className="room-id-feedback">
-                {copiedRoomId ? (
-                  <>
-                    <Check size={14} />
-                    {t('common.copied')}
-                  </>
-                ) : (
-                  <>
-                    <Copy size={14} />
-                    {t('common.clickToCopy', '点击复制')}
-                  </>
-                )}
-              </span>
-            </button>
-          </div>
+          {state.status === 'waiting' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                className={`room-id-copy-btn${copiedRoomId ? ' copied' : ''}`}
+                onClick={() => void copyRoomIdBadge()}
+                title={t('common.clickToCopy', '点击复制')}
+              >
+                <span className="room-id-label">ID</span>
+                <span className="room-id-value">{roomId}</span>
+                <span className="room-id-feedback">
+                  {copiedRoomId ? (
+                    <>
+                      <Check size={14} />
+                      {t('common.copied')}
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} />
+                      {t('common.clickToCopy', '点击复制')}
+                    </>
+                  )}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
 
         {waitingForOpponent && (
@@ -1142,7 +1164,7 @@ export default function App() {
                 >
                   <X size={16} />
                 </button>
-                {state.winner === 0 ? t('room.draw') : state.winner === 1 ? t('room.winner.black') : t('room.winner.white')}
+                {finishResultTitle()}
                 {state.finishReason && <span style={{ fontSize: '0.85em', fontWeight: 'normal', display: 'block', marginTop: 4, color: '#94a3b8' }}>{t('room.reason')}: {finishReasonLabel(state.finishReason)}</span>}
               </div>
             )}
