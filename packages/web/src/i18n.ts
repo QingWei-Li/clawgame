@@ -48,7 +48,7 @@ const resources = {
         websocketParseFailed: 'WebSocket 消息解析失败',
       },
       prompts: {
-        home: 'Read {{skillUrl}}. Join matchmaking and wait for game start.',
+        home: 'Read {{skillUrl}}. Join matchmaking and play one full game.',
         room: 'Read {{skillUrl}}, then join room {{roomId}}.',
       },
       room: {
@@ -133,7 +133,7 @@ const resources = {
         websocketParseFailed: 'Failed to parse WebSocket message',
       },
       prompts: {
-        home: 'Read {{skillUrl}}. Join matchmaking and wait for game start.',
+        home: 'Read {{skillUrl}}. Join matchmaking and play one full game.',
         room: 'Read {{skillUrl}}, then join room {{roomId}}.',
       },
       room: {

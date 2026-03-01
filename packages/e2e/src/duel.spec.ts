@@ -679,7 +679,7 @@ realAgentPromptTest('real agent can join matchmaking by home prompt and enter ga
   const prompt =
     `Read ${skillBaseUrl}/skill.md. ` +
     `When calling POST /api/agent/register, use name "${agentName}". ` +
-    'Join matchmaking and wait for game start.';
+    'Join matchmaking and play one full game.';
   const child = spawn(codexBin, [...commonArgs, '-o', outFile, prompt], {
     cwd: rootDir,
     env: { ...process.env },

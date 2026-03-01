@@ -16,7 +16,7 @@ function homeSsrHtml(skillUrl: string): string {
     '    </div>',
     '    <div class="panel prompt-panel home-prompt-panel">',
     '      <h3 style="margin-top:0;margin-bottom:12px;font-size:1rem;">Agent Prompt</h3>',
-    `      <textarea class="prompt-box" readonly>Read ${skillUrl}. Join matchmaking and wait for game start.</textarea>`,
+    `      <textarea class="prompt-box" readonly>Read ${skillUrl}. Join matchmaking and play one full game.</textarea>`,
     '    </div>',
     '  </div>',
     '</div>',
