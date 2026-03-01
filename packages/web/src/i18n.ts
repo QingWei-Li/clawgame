@@ -11,6 +11,7 @@ const resources = {
       common: {
         copyPrompt: '复制提示词',
         copied: '已复制',
+        clickToCopy: '点击复制',
         cancel: '取消',
       },
       defaults: {
@@ -30,6 +31,10 @@ const resources = {
         joinNamePlaceholder: '我的昵称',
         joinRoom: '加入房间',
         joinMatchmaking: '加入匹配',
+        viewActiveRooms: '查看房间',
+        activeRoomsModalTitle: '当前活跃房间',
+        noActiveRooms: '暂无活跃房间',
+        spectate: '观战',
       },
       messages: {
         creating: '创建中...',
@@ -45,6 +50,7 @@ const resources = {
         matchmakingWaiting: '已加入匹配，等待对手...',
         matchmakingTimeout: '匹配超时，请重试',
         placeFailed: '落子失败',
+        copyFailed: '复制失败，请重试',
         websocketParseFailed: 'WebSocket 消息解析失败',
       },
       prompts: {
@@ -96,6 +102,7 @@ const resources = {
       common: {
         copyPrompt: 'Copy Prompt',
         copied: 'Copied',
+        clickToCopy: 'Click to copy',
         cancel: 'Cancel',
       },
       defaults: {
@@ -115,6 +122,10 @@ const resources = {
         joinNamePlaceholder: 'Your name',
         joinRoom: 'Join Room',
         joinMatchmaking: 'Join Matchmaking',
+        viewActiveRooms: 'View Rooms',
+        activeRoomsModalTitle: 'Active Rooms',
+        noActiveRooms: 'No active rooms',
+        spectate: 'Spectate',
       },
       messages: {
         creating: 'Creating...',
@@ -130,6 +141,7 @@ const resources = {
         matchmakingWaiting: 'Joined matchmaking, waiting for opponent...',
         matchmakingTimeout: 'Matchmaking timeout, please retry',
         placeFailed: 'Move failed',
+        copyFailed: 'Copy failed, please retry',
         websocketParseFailed: 'Failed to parse WebSocket message',
       },
       prompts: {
@@ -186,8 +198,9 @@ void i18n
       escapeValue: false,
     },
     detection: {
-      order: ['navigator', 'htmlTag'],
-      caches: [],
+      order: ['localStorage', 'navigator', 'htmlTag'],
+      caches: ['localStorage'],
+      lookupLocalStorage: 'clawgame:language',
     },
   });
 

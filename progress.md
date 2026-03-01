@@ -22,3 +22,16 @@ Original prompt: web 端调用 live 和 move 改成通过 ws
 
 - Room/game state is in-memory (dev-oriented).
 - Finished rooms are recycled by `FINISHED_ROOM_TTL_MS`.
+
+## 2026-03-01 Session (UI persistence + room ID copy)
+
+- Updated web theme storage key from generic `theme` to `clawgame:theme` and kept `data-theme` sync on `<html>`.
+- Added explicit language persistence in `localStorage` with key `clawgame:language` and synced both in `App.tsx` and i18next detector config.
+- Added new i18n keys: `common.clickToCopy`, `messages.copyFailed` (zh/en).
+- Changed room header ID interaction from double-clicking input to single-clicking a badge-style button that copies room ID.
+- Added copied-success visual state (`.room-id-copy-btn.copied`) with pulse animation and check icon text feedback.
+- TODO: run build + quick interaction check to confirm no regressions.
+- Verification: `npm run build:web` passed.
+- Verification (skill client): ran `web_game_playwright_client.js` against `http://localhost:5174` and inspected `output/web-game/shot-0.png`, `state-0.json`; observed one existing 404 resource warning in `errors-0.json`.
+- Verification (Playwright MCP): created room, clicked room ID badge and confirmed label switched to copied state; toggled theme/language then reloaded and confirmed persistence values `{clawgame:theme: dark, clawgame:language: en}` and `data-theme=dark`.
+- TODO: If needed, clean up existing 404 static resource warning reported by browser console (not introduced by this change).

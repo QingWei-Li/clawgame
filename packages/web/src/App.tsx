@@ -37,10 +37,19 @@ type LiveStats = {
   waitingRooms: number;
 };
 
+type ActiveRoomSummary = {
+  roomId: string;
+  status: Status;
+  createdAt: number;
+  players: { name: string; actorType: 'human' | 'agent'; side: 1 | 2 }[];
+};
+
 const emptyBoard = () => Array.from({ length: 15 }, () => Array.from({ length: 15 }, () => 0 as Cell));
 const ROOM_SESSION_KEY_PREFIX = 'clawgame:room-session:';
 const HUMAN_TOKEN_KEY = 'clawgame:human-token';
 const LAST_ROOM_ID_KEY = 'clawgame:last-room-id';
+const THEME_KEY = 'clawgame:theme';
+const LANGUAGE_KEY = 'clawgame:language';
 
 type RoomSession = {
   seatToken: string;
@@ -217,6 +226,7 @@ export default function App() {
   const [msg, setMsg] = useState('');
   const [copiedRoomPrompt, setCopiedRoomPrompt] = useState(false);
   const [copiedHomePrompt, setCopiedHomePrompt] = useState(false);
+  const [copiedRoomId, setCopiedRoomId] = useState(false);
   const [liveStats, setLiveStats] = useState<LiveStats>({ activePlayers: 0, activeRooms: 0, waitingRooms: 0 });
   const [homeTab, setHomeTab] = useState<'agent' | 'human'>('agent');
   const [nowTs, setNowTs] = useState(Date.now());
@@ -224,6 +234,11 @@ export default function App() {
   const [joinPromptName, setJoinPromptName] = useState('');
   const [dismissedBanner, setDismissedBanner] = useState(false);
   const [showGameStart, setShowGameStart] = useState(false);
+  const [activeRoomsModalOpen, setActiveRoomsModalOpen] = useState(false);
+  const [activeRoomsList, setActiveRoomsList] = useState<ActiveRoomSummary[]>([]);
+  const [activeRoomsLoading, setActiveRoomsLoading] = useState(false);
+  const [activeRoomsError, setActiveRoomsError] = useState('');
+  const [spectatingMode, setSpectatingMode] = useState(false);
 
   useEffect(() => {
     if (state.status !== 'finished') {
@@ -242,6 +257,7 @@ export default function App() {
   const joinPromptedRoomRef = useRef<string | null>(null);
   const roomWsRef = useRef<WebSocket | null>(null);
   const moveReqSeqRef = useRef(0);
+  const roomIdCopiedTimerRef = useRef<number | null>(null);
   const pendingMoveRef = useRef(
     new Map<string, {
       resolve: (state: GameState) => void;
@@ -250,20 +266,45 @@ export default function App() {
     }>(),
   );
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('theme') as 'light' | 'dark') ||
-      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') {
+      return saved;
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
   const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
 
   const toggleLanguage = () => {
-    i18n.changeLanguage(i18n.language.startsWith('zh') ? 'en' : 'zh');
+    const nextLang = i18n.language.startsWith('zh') ? 'en' : 'zh';
+    void i18n.changeLanguage(nextLang);
+    localStorage.setItem(LANGUAGE_KEY, nextLang);
   };
+
+  useEffect(() => {
+    const savedLanguage = localStorage.getItem(LANGUAGE_KEY);
+    if (savedLanguage === 'zh' || savedLanguage === 'en') {
+      if (!i18n.language.startsWith(savedLanguage)) {
+        void i18n.changeLanguage(savedLanguage);
+      }
+      return;
+    }
+    const normalized = i18n.language.startsWith('zh') ? 'zh' : 'en';
+    localStorage.setItem(LANGUAGE_KEY, normalized);
+  }, [i18n]);
+
+  useEffect(() => {
+    return () => {
+      if (roomIdCopiedTimerRef.current) {
+        window.clearTimeout(roomIdCopiedTimerRef.current);
+      }
+    };
+  }, []);
 
   function syncRoomToUrl(nextRoomId: string) {
     const url = new URL(window.location.href);
@@ -421,7 +462,16 @@ export default function App() {
   }, [roomId, seatToken, websocketParseFailed, t]);
 
   useEffect(() => {
+    if (mySide !== 0) {
+      setSpectatingMode(false);
+    }
+  }, [mySide]);
+
+  useEffect(() => {
     if (!roomId || mySide !== 0) {
+      return;
+    }
+    if (spectatingMode) {
       return;
     }
     if (state.status === 'waiting' && state.players.length === 1) {
@@ -431,7 +481,7 @@ export default function App() {
     if (state.status !== 'waiting') {
       joinPromptedRoomRef.current = null;
     }
-  }, [roomId, mySide, state.status, state.players.length, joinName, humanToken, t]);
+  }, [roomId, mySide, state.status, state.players.length, joinName, humanToken, t, spectatingMode]);
 
   useEffect(() => {
     if (state.status !== 'playing') {
@@ -544,6 +594,7 @@ export default function App() {
     setMySide(0);
     setState(initialState);
     setMsg('');
+    setSpectatingMode(false);
   }
 
   function alertAndBackHome(message: string) {
@@ -615,6 +666,7 @@ export default function App() {
       syncRoomToUrl(payload.roomId);
       setSeatToken(payload.seatToken);
       setMySide(payload.side);
+      setSpectatingMode(false);
       setState(payload.state);
       saveRoomSession(payload.roomId, payload.seatToken, payload.side);
       setMsg('');
@@ -641,6 +693,7 @@ export default function App() {
       syncRoomToUrl(normalizedRoomId);
       setSeatToken(payload.seatToken);
       setMySide(payload.side);
+      setSpectatingMode(false);
       setState(payload.state);
       saveRoomSession(normalizedRoomId, payload.seatToken, payload.side);
       setMsg('');
@@ -670,6 +723,7 @@ export default function App() {
         syncRoomToUrl(payload.roomId);
         setSeatToken(payload.seatToken);
         setMySide(payload.side);
+        setSpectatingMode(false);
         setState(payload.state);
         saveRoomSession(payload.roomId, payload.seatToken, payload.side);
         setMsg('');
@@ -812,8 +866,63 @@ export default function App() {
     setTimeout(() => setCopiedRoomPrompt(false), 1500);
   }
 
+  async function copyRoomIdBadge() {
+    if (!roomId) return;
+    try {
+      await navigator.clipboard.writeText(roomId);
+      setCopiedRoomId(true);
+      if (roomIdCopiedTimerRef.current) {
+        window.clearTimeout(roomIdCopiedTimerRef.current);
+      }
+      roomIdCopiedTimerRef.current = window.setTimeout(() => {
+        setCopiedRoomId(false);
+        roomIdCopiedTimerRef.current = null;
+      }, 1200);
+    } catch {
+      setMsg(t('messages.copyFailed', '复制失败，请重试'));
+    }
+  }
+
   const waitingForOpponent = state.players.length < 2 && state.status === 'waiting';
   const isTwoHumans = state.players.length === 2 && state.players.every((p) => p.actorType === 'human');
+
+  async function openActiveRoomsModal() {
+    setActiveRoomsModalOpen(true);
+    setActiveRoomsError('');
+    setActiveRoomsLoading(true);
+    try {
+      const payload = await jsonFetch<{ activeRooms: ActiveRoomSummary[] }>(apiUrl('/api/rooms/active'));
+      setActiveRoomsList(payload.activeRooms ?? []);
+    } catch (e) {
+      setActiveRoomsError((e as Error).message);
+    } finally {
+      setActiveRoomsLoading(false);
+    }
+  }
+
+  function closeActiveRoomsModal() {
+    setActiveRoomsModalOpen(false);
+    setActiveRoomsError('');
+  }
+
+  async function spectateRoom(targetRoomId: string) {
+    try {
+      setMsg(t('messages.joining'));
+      const roomState = await jsonFetch<GameState>(apiUrl(`/api/rooms/${targetRoomId}/state`));
+      setRoomInput(targetRoomId);
+      setRoomId(targetRoomId);
+      syncRoomToUrl(targetRoomId);
+      setSeatToken('');
+      setMySide(0);
+      setSpectatingMode(true);
+      setState(roomState);
+      setActiveRoomsModalOpen(false);
+      setMsg('');
+    } catch (e) {
+      setActiveRoomsError(`${t('messages.joinFailed')}: ${(e as Error).message}`);
+      setMsg(`${t('messages.joinFailed')}: ${(e as Error).message}`);
+    }
+  }
 
   function renderHome() {
     return (
@@ -827,9 +936,14 @@ export default function App() {
           <div className="home-stats">
             <span className="home-stats-label">{t('home.currentPlayers')}</span>
             <span className="home-stats-value">{liveStats.activePlayers}</span>
-            <span className="home-stats-meta">
-              {t('home.activeRoomsAndWaiting', { activeRooms: liveStats.activeRooms, waitingRooms: liveStats.waitingRooms })}
-            </span>
+            <div className="home-stats-meta-row">
+              <span className="home-stats-meta">
+                {t('home.activeRoomsAndWaiting', { activeRooms: liveStats.activeRooms, waitingRooms: liveStats.waitingRooms })}
+              </span>
+              <button className="secondary home-stats-mini-btn" onClick={() => void openActiveRoomsModal()}>
+                {t('home.viewActiveRooms')}
+              </button>
+            </div>
           </div>
 
           <div className="home-tabs">
@@ -936,26 +1050,28 @@ export default function App() {
             </h2>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontWeight: 'bold' }}>ID:</span>
-            <input
-              readOnly
-              value={roomId}
-              onDoubleClick={(e) => {
-                const target = e.target as HTMLInputElement;
-                target.select();
-                navigator.clipboard.writeText(roomId);
-              }}
-              style={{
-                background: 'var(--color-surface)',
-                border: '3px solid var(--color-dark)',
-                color: 'var(--color-dark)',
-                padding: '4px 8px',
-                width: '320px',
-                fontSize: '1rem',
-                cursor: 'pointer'
-              }}
-              title={t('common.doubleClickToCopy', '双击复制')}
-            />
+            <button
+              type="button"
+              className={`room-id-copy-btn${copiedRoomId ? ' copied' : ''}`}
+              onClick={() => void copyRoomIdBadge()}
+              title={t('common.clickToCopy', '点击复制')}
+            >
+              <span className="room-id-label">ID</span>
+              <span className="room-id-value">{roomId}</span>
+              <span className="room-id-feedback">
+                {copiedRoomId ? (
+                  <>
+                    <Check size={14} />
+                    {t('common.copied')}
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} />
+                    {t('common.clickToCopy', '点击复制')}
+                  </>
+                )}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -1114,6 +1230,38 @@ export default function App() {
             <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button className="secondary" onClick={closeJoinPrompt}>{t('common.cancel')}</button>
               <button onClick={confirmJoinPrompt}><Users size={16} /> {t('home.joinRoom')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {activeRoomsModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card panel">
+            <div className="modal-title-row">
+              <h3 style={{ margin: 0 }}>{t('home.activeRoomsModalTitle')}</h3>
+              <button className="secondary modal-close-btn" onClick={closeActiveRoomsModal}>
+                <X size={14} /> {t('common.cancel')}
+              </button>
+            </div>
+            <div className="active-rooms-list">
+              {activeRoomsLoading && <p className="active-rooms-empty">{t('messages.joining')}</p>}
+              {!activeRoomsLoading && activeRoomsError && <p className="active-rooms-error">{activeRoomsError}</p>}
+              {!activeRoomsLoading && !activeRoomsError && activeRoomsList.length === 0 && (
+                <p className="active-rooms-empty">{t('home.noActiveRooms')}</p>
+              )}
+              {!activeRoomsLoading && !activeRoomsError && activeRoomsList.map((item) => (
+                <div key={item.roomId} className="active-room-item">
+                  <div className="active-room-main">
+                    <div className="active-room-id">{item.roomId}</div>
+                    <div className="active-room-meta">
+                      {t(`room.status.${item.status}`)} · {item.players.map((p) => p.name).join(' vs ')}
+                    </div>
+                  </div>
+                  <button className="secondary" onClick={() => void spectateRoom(item.roomId)}>
+                    {t('home.spectate')}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </div>
