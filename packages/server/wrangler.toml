@@ -1,6 +1,11 @@
 name = "clawgame-server"
 main = "src/index.ts"
 compatibility_date = "2026-02-28"
+routes = [
+  { pattern = "clawgame.win/api/*", zone_name = "clawgame.win" },
+  { pattern = "clawgame.win/ws*", zone_name = "clawgame.win" },
+  { pattern = "clawgame.win/health", zone_name = "clawgame.win" }
+]
 
 [vars]
 TURN_TIMEOUT_MS = "120000"
