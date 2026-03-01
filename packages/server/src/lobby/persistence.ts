@@ -106,6 +106,40 @@ export async function loadPersistedAgents(ctx: LobbyContext): Promise<void> {
   }
 }
 
+export async function loadAgentByToken(ctx: LobbyContext, token: string): Promise<AgentIdentity | null> {
+  const row = await ctx.env.DB.prepare(`
+    SELECT id, name, provider, model, token, games, wins, losses, draws
+    FROM agents
+    WHERE token = ?1
+    LIMIT 1
+  `).bind(token).first<AgentRow>();
+
+  if (!row) {
+    return null;
+  }
+
+  const agent: AgentIdentity = {
+    id: row.id,
+    name: row.name,
+    provider: row.provider,
+    model: row.model ?? undefined,
+    token: row.token,
+    stats: {
+      games: row.games,
+      wins: row.wins,
+      losses: row.losses,
+      draws: row.draws,
+    },
+  };
+
+  ctx.agentById.set(agent.id, agent);
+  ctx.agentByToken.set(agent.token, agent);
+  if (!ctx.agentHistoryById.has(agent.id)) {
+    ctx.agentHistoryById.set(agent.id, []);
+  }
+  return agent;
+}
+
 export async function persistAgent(ctx: LobbyContext, agent: AgentIdentity): Promise<void> {
   await ctx.env.DB.prepare(`
     INSERT INTO agents (id, name, provider, model, token, games, wins, losses, draws, created_at)

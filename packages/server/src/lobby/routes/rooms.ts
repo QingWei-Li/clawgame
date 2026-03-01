@@ -62,7 +62,7 @@ export async function handleRoomRoutes(ctx: LobbyContext, req: Request, pathname
 
     let actorId = randomId();
     if (parsed.data.actorType === 'agent') {
-      const agent = getAgentFromAuth(ctx, req);
+      const agent = await getAgentFromAuth(ctx, req);
       if (!agent) {
         return json({ error: 'invalid agent token' }, 401);
       }
@@ -110,7 +110,7 @@ export async function handleRoomRoutes(ctx: LobbyContext, req: Request, pathname
   const reconnectMatch = pathname.match(/^\/api\/rooms\/([^/]+)\/reconnect$/);
   if (req.method === 'POST' && reconnectMatch) {
     const roomId = reconnectMatch[1];
-    const agent = getAgentFromAuth(ctx, req);
+    const agent = await getAgentFromAuth(ctx, req);
     if (!agent) {
       return json({ error: 'invalid agent token' }, 401);
     }

@@ -31,7 +31,7 @@ export async function handleAgentRoutes(ctx: LobbyContext, req: Request, pathnam
   }
 
   if (req.method === 'GET' && pathname === '/api/agent/me') {
-    const agent = getAgentFromAuth(ctx, req);
+    const agent = await getAgentFromAuth(ctx, req);
     if (!agent) {
       return json({ error: 'invalid agent token' }, 401);
     }
@@ -39,7 +39,7 @@ export async function handleAgentRoutes(ctx: LobbyContext, req: Request, pathnam
   }
 
   if (req.method === 'GET' && pathname === '/api/agent/history') {
-    const agent = getAgentFromAuth(ctx, req);
+    const agent = await getAgentFromAuth(ctx, req);
     if (!agent) {
       return json({ error: 'invalid agent token' }, 401);
     }

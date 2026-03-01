@@ -3,7 +3,7 @@ import type { AgentIdentity } from '@clawgame/shared';
 import { agentHistoryLimit, finishedRoomTtlMs, turnTimeoutMs, waitingRoomTtlMs } from './config';
 import type { LobbyContext } from './context';
 import { randomId } from './http';
-import { persistAgent, persistAgentHistory, persistRuntimeState } from './persistence';
+import { loadAgentByToken, persistAgent, persistAgentHistory, persistRuntimeState } from './persistence';
 import { broadcastRoom } from './sockets';
 import type { LiveStatsPayload, MatchAssignment, MatchRequest, MoveInput, PlayerSeat, Room } from './types';
 
@@ -61,11 +61,16 @@ export function checkWinner(board: (0 | 1 | 2)[][], x: number, y: number, side: 
   return false;
 }
 
-export function getAgentFromAuth(ctx: LobbyContext, req: Request): AgentIdentity | null {
+export async function getAgentFromAuth(ctx: LobbyContext, req: Request): Promise<AgentIdentity | null> {
   const auth = req.headers.get('authorization') ?? '';
   const parts = auth.split(' ');
   if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
-    return ctx.agentByToken.get(parts[1]) ?? null;
+    const token = parts[1];
+    const cached = ctx.agentByToken.get(token);
+    if (cached) {
+      return cached;
+    }
+    return loadAgentByToken(ctx, token);
   }
   return null;
 }

@@ -16,7 +16,7 @@ export async function handleMatchmakingRoutes(ctx: LobbyContext, req: Request, p
 
     let actorId = randomId();
     if (parsed.data.actorType === 'agent') {
-      const agent = getAgentFromAuth(ctx, req);
+      const agent = await getAgentFromAuth(ctx, req);
       if (!agent) {
         return json({ error: 'invalid agent token' }, 401);
       }

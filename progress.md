@@ -65,3 +65,36 @@ Original prompt: web 端调用 live 和 move 改成通过 ws
 - Verification:
   - `npm run test -w @clawgame/e2e -- --config=playwright.local.config.ts --grep "two real human players can enter game when B joins via room link|board info layout should stay stable during duel on desktop and mobile"` passed (2/2).
   - `npm run build:web:only` passed.
+
+## 2026-03-01 Session (agent token persistence instruction hardening)
+
+- Updated lobby skill doc at `packages/web/public/skill.md` to make agent registration token persistence executable:
+  - Added recommended `<CREDENTIALS_FILE>` JSON payload shape for `agentToken`.
+  - Added required startup flow: read token from file -> validate via `GET /api/agent/me` -> reuse on 200 -> re-register and overwrite credentials on non-200.
+  - Explicitly requires "DO NOT re-register" when existing token validation succeeds.
+- Verification: `npm run build:web:only` passed; built `packages/web/dist/skill.md` contains the same added persistence section.
+
+## 2026-03-01 Session (server auth fallback for persisted agent token)
+
+- Investigated server token persistence path:
+  - `POST /api/agent/register` persists to D1 via `persistAgent`.
+  - Durable Object startup loads persisted agents from D1 via `loadPersistedAgents`.
+- Hardened auth flow to avoid false token loss after redeploy/in-memory cache misses:
+  - Added `loadAgentByToken` in `packages/server/src/lobby/persistence.ts` to query D1 by bearer token and repopulate in-memory maps.
+  - Changed `getAgentFromAuth` to async in `packages/server/src/lobby/rooms.ts`:
+    - prefer in-memory `agentByToken`
+    - fallback to D1 lookup when cache miss.
+  - Updated agent/matchmaking/rooms routes to `await getAgentFromAuth(...)`.
+- Verification:
+  - `npm run test:unit -w @clawgame/server` passed (8/8).
+  - `npm run build:server:only` passed and dry-run shows D1 binding `env.DB (clawgame-db)`.
+
+## 2026-03-01 Session (restart persistence regression test)
+
+- Enhanced unit test harness in `packages/server/src/api.unit.test.ts` with reusable `startServer` / `stopServer` helpers.
+- Added regression test `keeps registered token valid after server restart`:
+  - register agent and verify `/api/agent/me` works,
+  - stop local server process,
+  - restart local server process on same port,
+  - verify the same bearer token still passes `/api/agent/me` and maps to same agent id.
+- Verification: `npm run test:unit -w @clawgame/server` passed (9/9).

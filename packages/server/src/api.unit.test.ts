@@ -6,6 +6,51 @@ const port = 19000 + Math.floor(Math.random() * 1000);
 const baseUrl = `http://127.0.0.1:${port}`;
 let serverProc: ChildProcess | null = null;
 
+async function startServer(): Promise<void> {
+  if (serverProc) {
+    return;
+  }
+  serverProc = spawn('npx', [
+    'wrangler',
+    'dev',
+    '--local',
+    '--config',
+    'wrangler.toml',
+    '--port',
+    String(port),
+    '--var',
+    'TURN_TIMEOUT_MS:5000',
+    '--var',
+    'WAITING_ROOM_TTL_MS:4000',
+  ], {
+    cwd: process.cwd(),
+    env: { ...process.env },
+    stdio: 'pipe',
+  });
+  await waitForServerReady();
+}
+
+async function stopServer(): Promise<void> {
+  if (!serverProc) {
+    return;
+  }
+  const proc = serverProc;
+  serverProc = null;
+  await new Promise<void>((resolve) => {
+    let finished = false;
+    const done = () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      resolve();
+    };
+    proc.once('exit', done);
+    proc.kill('SIGKILL');
+    setTimeout(done, 1000);
+  });
+}
+
 async function waitForServerReady() {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
@@ -73,31 +118,11 @@ async function wsLiveStatsRequest(): Promise<{ activePlayers: number; activeRoom
 }
 
 beforeAll(async () => {
-  serverProc = spawn('npx', [
-    'wrangler',
-    'dev',
-    '--local',
-    '--config',
-    'wrangler.toml',
-    '--port',
-    String(port),
-    '--var',
-    'TURN_TIMEOUT_MS:5000',
-    '--var',
-    'WAITING_ROOM_TTL_MS:4000',
-  ], {
-    cwd: process.cwd(),
-    env: { ...process.env },
-    stdio: 'pipe',
-  });
-  await waitForServerReady();
+  await startServer();
 }, 25_000);
 
-afterAll(() => {
-  if (serverProc) {
-    serverProc.kill('SIGKILL');
-    serverProc = null;
-  }
+afterAll(async () => {
+  await stopServer();
 });
 
 describe.sequential('server api coverage', () => {
@@ -132,6 +157,30 @@ describe.sequential('server api coverage', () => {
     expect(agentStats.status).toBe(200);
     expect(agentStats.data.leaderboard.some((row) => row.id === register.data.profile.id)).toBe(true);
   });
+
+  it('keeps registered token valid after server restart', async () => {
+    const register = await jsonRequest<{ token: string; profile: { id: string } }>('/api/agent/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: `agent-restart-${Date.now()}`, provider: 'codex', model: 'gpt-5' }),
+    });
+    expect(register.status).toBe(201);
+
+    const beforeRestart = await jsonRequest<{ id: string }>('/api/agent/me', {
+      headers: { authorization: `Bearer ${register.data.token}` },
+    });
+    expect(beforeRestart.status).toBe(200);
+    expect(beforeRestart.data.id).toBe(register.data.profile.id);
+
+    await stopServer();
+    await startServer();
+
+    const afterRestart = await jsonRequest<{ id: string }>('/api/agent/me', {
+      headers: { authorization: `Bearer ${register.data.token}` },
+    });
+    expect(afterRestart.status).toBe(200);
+    expect(afterRestart.data.id).toBe(register.data.profile.id);
+  }, 60_000);
 
   it('covers room create/join/state/move/logs/leave/open/active/live', async () => {
     const hostToken = `unit-host-${Date.now()}`;
