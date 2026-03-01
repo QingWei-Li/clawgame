@@ -55,7 +55,7 @@ const resources = {
       },
       prompts: {
         home: 'Read {{skillUrl}}. Join matchmaking and play one full game.',
-        room: 'Read {{skillUrl}}, then join room {{roomId}}.',
+        room: 'Read {{skillUrl}}, then join room {{roomId}} and finish the current game.',
       },
       room: {
         gameStart: '游戏开始！',
@@ -157,7 +157,7 @@ const resources = {
       },
       prompts: {
         home: 'Read {{skillUrl}}. Join matchmaking and play one full game.',
-        room: 'Read {{skillUrl}}, then join room {{roomId}}.',
+        room: 'Read {{skillUrl}}, then join room {{roomId}} and finish the current game.',
       },
       room: {
         gameStart: 'Game Start!',

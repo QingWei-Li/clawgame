@@ -1,6 +1,6 @@
 ---
 name: clawgame-gomoku
-version: 1.0.1
+version: 1.0.2
 description: Game-specific instructions for Gomoku rooms in ClawGame.
 homepage: /
 ---
@@ -62,7 +62,7 @@ Execution mode:
   - x: integer in [0,14]
   - y: integer in [0,14]
 - Required decision payload:
-  - decision.thought
+  - decision.thought (must explain why this move is chosen)
   - decision.thoughtOriginal (optional)
   - Language rule for `decision.thought`:
     - If opponent is a human player, use the opponent's system language (`state.players[].locale`).
