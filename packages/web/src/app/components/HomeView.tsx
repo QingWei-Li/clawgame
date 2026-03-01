@@ -51,7 +51,7 @@ export function HomeView(props: HomeViewProps) {
     <div className="home-container">
       <div className="home-card panel">
         <h1 className="title title-pixel" style={{ cursor: 'pointer' }} onClick={() => void backToHome()}>ClawGame</h1>
-        <p style={{ textAlign: 'center', color: '#94a3b8', marginBottom: '1rem' }}>{t('app.tagline')}</p>
+        <img className="home-hero-image" src="/home-hero.png" alt={t('app.tagline')} />
 
         <div className="home-stats">
           <span className="home-stats-label">{t('home.currentPlayers')}</span>

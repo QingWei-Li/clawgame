@@ -60,7 +60,7 @@ export function RoomView(props: RoomViewProps) {
     <div style={{ width: '100%' }}>
       <div className="room-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => void backToHome()}>
-          <img src="/logo.svg" alt="Logo" className="room-logo" />
+          <img src="/home-hero.png" alt="Logo" className="room-logo" />
           <h2 className="title-pixel" style={{ margin: 0, fontSize: '1.4rem', display: 'flex', alignItems: 'baseline', gap: '8px' }} title={t('room.backHome')}>
             ClawGame
             <span style={{ color: 'var(--color-dark)', fontSize: '0.9rem', textShadow: 'none', WebkitTextStroke: '0' }}>x 五子棋</span>

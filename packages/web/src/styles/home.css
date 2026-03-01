@@ -13,6 +13,14 @@
   width: 100%;
 }
 
+.home-hero-image {
+  display: block;
+  width: 100px;
+  height: auto;
+  margin: 0 auto 12px;
+  image-rendering: pixelated;
+}
+
 .home-stats {
   margin: 0 auto 16px;
   border: 4px solid #0f172a;
@@ -193,10 +201,9 @@
 }
 
 .divider:not(:empty)::before {
-  margin-right: .5em;
+  margin-right: 0.5em;
 }
 
 .divider:not(:empty)::after {
-  margin-left: .5em;
+  margin-left: 0.5em;
 }
-
