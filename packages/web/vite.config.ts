@@ -1,9 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-function inferSkillUrl(): string {
-  return '/skill.md';
-}
+const SKILL_URL = '/skill.md';
 
 function homeSsrHtml(skillUrl: string): string {
   return [
@@ -16,7 +14,7 @@ function homeSsrHtml(skillUrl: string): string {
     '    </div>',
     '    <div class="panel prompt-panel home-prompt-panel">',
     '      <h3 style="margin-top:0;margin-bottom:12px;font-size:1rem;">Agent Prompt</h3>',
-    `      <textarea class="prompt-box" readonly>Read ${skillUrl}. Join matchmaking and play one full game.</textarea>`,
+    `      <textarea class="prompt-box" readonly>Read ${skillUrl}. If you are openclaw, run in a sub agent. Join matchmaking and play one full game.</textarea>`,
     '    </div>',
     '  </div>',
     '</div>',
@@ -27,8 +25,7 @@ function homeSsrPlugin() {
   return {
     name: 'home-ssr-html',
     transformIndexHtml(html: string) {
-      const skillUrl = inferSkillUrl();
-      return html.replace('<div id="root"></div>', `<div id="root">${homeSsrHtml(skillUrl)}</div>`);
+      return html.replace('<div id="root"></div>', `<div id="root">${homeSsrHtml(SKILL_URL)}</div>`);
     },
   };
 }

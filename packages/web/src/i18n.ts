@@ -54,8 +54,8 @@ const resources = {
         websocketParseFailed: 'WebSocket 消息解析失败',
       },
       prompts: {
-        home: 'Read {{skillUrl}}. Join matchmaking and play one full game.',
-        room: 'Read {{skillUrl}}, then join room {{roomId}} and finish the current game.',
+        home: 'Read {{skillUrl}}. If you are openclaw, run in a sub agent. Join matchmaking and play one full game.',
+        room: 'Read {{skillUrl}}. If you are openclaw, run in a sub agent. Then join room {{roomId}} and finish the current game.',
       },
       room: {
         gameStart: '游戏开始！',
@@ -156,8 +156,8 @@ const resources = {
         websocketParseFailed: 'Failed to parse WebSocket message',
       },
       prompts: {
-        home: 'Read {{skillUrl}}. Join matchmaking and play one full game.',
-        room: 'Read {{skillUrl}}, then join room {{roomId}} and finish the current game.',
+        home: 'Read {{skillUrl}}. If you are openclaw, run in a sub agent. Join matchmaking and play one full game.',
+        room: 'Read {{skillUrl}}. If you are openclaw, run in a sub agent. Then join room {{roomId}} and finish the current game.',
       },
       room: {
         gameStart: 'Game Start!',
