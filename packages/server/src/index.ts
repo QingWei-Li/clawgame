@@ -12,6 +12,7 @@ import {
 
 type Env = {
   LOBBY: DurableObjectNamespace;
+  DB: D1Database;
   TURN_TIMEOUT_MS?: string;
   FINISHED_ROOM_TTL_MS?: string;
   WAITING_ROOM_TTL_MS?: string;
@@ -81,12 +82,46 @@ type LiveStatsPayload = {
   waitingRooms: number;
 };
 
+type RuntimeSnapshot = {
+  rooms: Record<string, Room>;
+  seatTokenIndex: Record<string, { roomId: string; side: PlayerSide }>;
+  waitingByTicket: Record<string, MatchRequest>;
+  assignmentByTicket: Record<string, MatchAssignment>;
+};
+
+type AgentRow = {
+  id: string;
+  name: string;
+  provider: string;
+  model: string | null;
+  token: string;
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+};
+
+type AgentHistoryRow = {
+  agent_id: string;
+  room_id: string;
+  side: number;
+  result: AgentMatchHistoryEntry['result'];
+  finish_reason: AgentMatchHistoryEntry['finishReason'];
+  opponent_actor_type: ActorType | null;
+  opponent_name: string | null;
+  opponent_actor_id: string | null;
+  mode: AgentMatchHistoryEntry['mode'];
+  moves: number;
+  duration_ms: number;
+  started_at: number;
+  finished_at: number;
+};
+
 const DEFAULT_TURN_TIMEOUT_MS = 120_000;
 const DEFAULT_FINISHED_ROOM_TTL_MS = 30_000;
 const DEFAULT_WAITING_ROOM_TTL_MS = 300_000;
 const DEFAULT_AGENT_HISTORY_LIMIT = 200;
-const AGENT_ID_KEY_PREFIX = 'agent:id:';
-const AGENT_HISTORY_KEY_PREFIX = 'agent:history:';
+const DO_RUNTIME_STATE_KEY = 'runtime:v1';
 
 const registerAgentSchema = z.object({
   name: z.string().min(1).max(50),
@@ -204,32 +239,104 @@ export class LobbyDO {
     private readonly env: Env,
   ) {
     this.ready = this.state.blockConcurrencyWhile(async () => {
+      await this.ensureD1Schema();
       await this.loadPersistedAgents();
+      await this.loadRuntimeState();
     });
   }
 
-  private agentIdentityKey(agentId: string): string {
-    return `${AGENT_ID_KEY_PREFIX}${agentId}`;
-  }
-
-  private agentHistoryKey(agentId: string): string {
-    return `${AGENT_HISTORY_KEY_PREFIX}${agentId}`;
+  private async ensureD1Schema(): Promise<void> {
+    await this.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS agents (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT,
+        token TEXT NOT NULL UNIQUE,
+        games INTEGER NOT NULL DEFAULT 0,
+        wins INTEGER NOT NULL DEFAULT 0,
+        losses INTEGER NOT NULL DEFAULT 0,
+        draws INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      )
+    `).run();
+    await this.env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_agents_token ON agents(token)`).run();
+    await this.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS agent_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent_id TEXT NOT NULL,
+        room_id TEXT NOT NULL,
+        side INTEGER NOT NULL,
+        result TEXT NOT NULL,
+        finish_reason TEXT NOT NULL,
+        opponent_actor_type TEXT,
+        opponent_name TEXT,
+        opponent_actor_id TEXT,
+        mode TEXT NOT NULL,
+        moves INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        started_at INTEGER NOT NULL,
+        finished_at INTEGER NOT NULL
+      )
+    `).run();
+    await this.env.DB.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_agent_history_agent_finished
+      ON agent_history(agent_id, finished_at DESC)
+    `).run();
   }
 
   private async loadPersistedAgents(): Promise<void> {
-    const persistedAgents = await this.state.storage.list<AgentIdentity>({ prefix: AGENT_ID_KEY_PREFIX });
     this.agentById.clear();
     this.agentByToken.clear();
-    for (const agent of persistedAgents.values()) {
+    const rows = await this.env.DB.prepare(`
+      SELECT id, name, provider, model, token, games, wins, losses, draws
+      FROM agents
+    `).all<AgentRow>();
+    for (const row of rows.results) {
+      const agent: AgentIdentity = {
+        id: row.id,
+        name: row.name,
+        provider: row.provider,
+        model: row.model ?? undefined,
+        token: row.token,
+        stats: {
+          games: row.games,
+          wins: row.wins,
+          losses: row.losses,
+          draws: row.draws,
+        },
+      };
       this.agentById.set(agent.id, agent);
       this.agentByToken.set(agent.token, agent);
     }
 
-    const persistedHistories = await this.state.storage.list<AgentMatchHistoryEntry[]>({ prefix: AGENT_HISTORY_KEY_PREFIX });
     this.agentHistoryById.clear();
-    for (const [key, history] of persistedHistories.entries()) {
-      const agentId = key.slice(AGENT_HISTORY_KEY_PREFIX.length);
-      this.agentHistoryById.set(agentId, history);
+    const historyRows = await this.env.DB.prepare(`
+      SELECT agent_id, room_id, side, result, finish_reason, opponent_actor_type, opponent_name, opponent_actor_id, mode, moves, duration_ms, started_at, finished_at
+      FROM agent_history
+      ORDER BY finished_at ASC
+    `).all<AgentHistoryRow>();
+    for (const row of historyRows.results) {
+      const list = this.agentHistoryById.get(row.agent_id) ?? [];
+      list.push({
+        roomId: row.room_id,
+        side: row.side as PlayerSide,
+        result: row.result,
+        finishReason: row.finish_reason,
+        opponent: row.opponent_actor_id
+          ? {
+            actorType: row.opponent_actor_type as ActorType,
+            name: row.opponent_name ?? '',
+            actorId: row.opponent_actor_id,
+          }
+          : null,
+        mode: row.mode,
+        moves: row.moves,
+        durationMs: row.duration_ms,
+        startedAt: row.started_at,
+        finishedAt: row.finished_at,
+      });
+      this.agentHistoryById.set(row.agent_id, list);
     }
 
     for (const agentId of this.agentById.keys()) {
@@ -240,12 +347,81 @@ export class LobbyDO {
   }
 
   private async persistAgent(agent: AgentIdentity): Promise<void> {
-    await this.state.storage.put(this.agentIdentityKey(agent.id), agent);
+    await this.env.DB.prepare(`
+      INSERT INTO agents (id, name, provider, model, token, games, wins, losses, draws, created_at)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+      ON CONFLICT(id) DO UPDATE SET
+        name=excluded.name,
+        provider=excluded.provider,
+        model=excluded.model,
+        token=excluded.token,
+        games=excluded.games,
+        wins=excluded.wins,
+        losses=excluded.losses,
+        draws=excluded.draws
+    `).bind(
+      agent.id,
+      agent.name,
+      agent.provider,
+      agent.model ?? null,
+      agent.token,
+      agent.stats.games,
+      agent.stats.wins,
+      agent.stats.losses,
+      agent.stats.draws,
+      Date.now(),
+    ).run();
   }
 
   private async persistAgentHistory(agentId: string): Promise<void> {
     const history = this.agentHistoryById.get(agentId) ?? [];
-    await this.state.storage.put(this.agentHistoryKey(agentId), history);
+    await this.env.DB.prepare(`DELETE FROM agent_history WHERE agent_id = ?1`).bind(agentId).run();
+    if (history.length === 0) {
+      return;
+    }
+    const statements = history.map((entry) =>
+      this.env.DB.prepare(`
+        INSERT INTO agent_history (
+          agent_id, room_id, side, result, finish_reason, opponent_actor_type, opponent_name, opponent_actor_id, mode, moves, duration_ms, started_at, finished_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+      `).bind(
+        agentId,
+        entry.roomId,
+        entry.side,
+        entry.result,
+        entry.finishReason,
+        entry.opponent?.actorType ?? null,
+        entry.opponent?.name ?? null,
+        entry.opponent?.actorId ?? null,
+        entry.mode,
+        entry.moves,
+        entry.durationMs,
+        entry.startedAt,
+        entry.finishedAt,
+      ),
+    );
+    await this.env.DB.batch(statements);
+  }
+
+  private async loadRuntimeState(): Promise<void> {
+    const snapshot = await this.state.storage.get<RuntimeSnapshot>(DO_RUNTIME_STATE_KEY);
+    if (!snapshot) {
+      return;
+    }
+    this.rooms = new Map(Object.entries(snapshot.rooms ?? {}));
+    this.seatTokenIndex = new Map(Object.entries(snapshot.seatTokenIndex ?? {}));
+    this.waitingByTicket = new Map(Object.entries(snapshot.waitingByTicket ?? {}));
+    this.assignmentByTicket = new Map(Object.entries(snapshot.assignmentByTicket ?? {}));
+  }
+
+  private async persistRuntimeState(): Promise<void> {
+    const snapshot: RuntimeSnapshot = {
+      rooms: Object.fromEntries(this.rooms.entries()),
+      seatTokenIndex: Object.fromEntries(this.seatTokenIndex.entries()),
+      waitingByTicket: Object.fromEntries(this.waitingByTicket.entries()),
+      assignmentByTicket: Object.fromEntries(this.assignmentByTicket.entries()),
+    };
+    await this.state.storage.put(DO_RUNTIME_STATE_KEY, snapshot);
   }
 
   private finishedRoomTtlMs(): number {
@@ -293,7 +469,7 @@ export class LobbyDO {
     };
   }
 
-  private createRoomWithPlayer(actorType: ActorType, actorId: string, name: string): { room: Room; seat: PlayerSeat } {
+  private async createRoomWithPlayer(actorType: ActorType, actorId: string, name: string): Promise<{ room: Room; seat: PlayerSeat }> {
     const roomId = randomId();
     const seat: PlayerSeat = {
       side: 1,
@@ -322,10 +498,11 @@ export class LobbyDO {
 
     this.rooms.set(roomId, room);
     this.seatTokenIndex.set(seat.seatToken, { roomId, side: seat.side });
+    await this.persistRuntimeState();
     return { room, seat };
   }
 
-  private createRoomWithPlayers(left: MatchRequest, right: MatchRequest): { room: Room; leftSeat: PlayerSeat; rightSeat: PlayerSeat } {
+  private async createRoomWithPlayers(left: MatchRequest, right: MatchRequest): Promise<{ room: Room; leftSeat: PlayerSeat; rightSeat: PlayerSeat }> {
     const roomId = randomId();
     const leftSeat: PlayerSeat = {
       side: 1,
@@ -363,17 +540,18 @@ export class LobbyDO {
     this.rooms.set(roomId, room);
     this.seatTokenIndex.set(leftSeat.seatToken, { roomId, side: leftSeat.side });
     this.seatTokenIndex.set(rightSeat.seatToken, { roomId, side: rightSeat.side });
+    await this.persistRuntimeState();
     return { room, leftSeat, rightSeat };
   }
 
-  private assignMatch(leftTicketId: string, rightTicketId: string): void {
+  private async assignMatch(leftTicketId: string, rightTicketId: string): Promise<void> {
     const left = this.waitingByTicket.get(leftTicketId);
     const right = this.waitingByTicket.get(rightTicketId);
     if (!left || !right) {
       return;
     }
 
-    const { room, leftSeat, rightSeat } = this.createRoomWithPlayers(left, right);
+    const { room, leftSeat, rightSeat } = await this.createRoomWithPlayers(left, right);
     const state = this.roomToState(room);
     this.assignmentByTicket.set(leftTicketId, {
       ticketId: leftTicketId,
@@ -409,6 +587,7 @@ export class LobbyDO {
     });
     this.waitingByTicket.delete(leftTicketId);
     this.waitingByTicket.delete(rightTicketId);
+    await this.persistRuntimeState();
     this.broadcastRoom(room.id, { type: 'state', state });
   }
 
@@ -434,7 +613,7 @@ export class LobbyDO {
     return null;
   }
 
-  private tryJoinOpenWaitingRoom(me: MatchRequest): MatchAssignment | null {
+  private async tryJoinOpenWaitingRoom(me: MatchRequest): Promise<MatchAssignment | null> {
     const openRoom = Array.from(this.rooms.values())
       .filter((room) => room.status === 'waiting' && room.players.length === 1)
       .sort((a, b) => b.createdAt - a.createdAt)
@@ -461,6 +640,7 @@ export class LobbyDO {
     this.seatTokenIndex.set(newSeat.seatToken, { roomId: openRoom.id, side: newSeat.side });
 
     const state = this.roomToState(openRoom);
+    await this.persistRuntimeState();
     this.broadcastRoom(openRoom.id, { type: 'state', state });
     return {
       ticketId: randomId(),
@@ -530,7 +710,7 @@ export class LobbyDO {
     }
   }
 
-  private recycleRoom(roomId: string): void {
+  private async recycleRoom(roomId: string): Promise<void> {
     this.rooms.delete(roomId);
     this.deleteSeatTokensByRoom(roomId);
     const timer = this.roomCleanupTimers.get(roomId);
@@ -538,6 +718,7 @@ export class LobbyDO {
       clearTimeout(timer);
       this.roomCleanupTimers.delete(roomId);
     }
+    await this.persistRuntimeState();
   }
 
   private scheduleFinishedRoomRecycle(room: Room): void {
@@ -549,12 +730,12 @@ export class LobbyDO {
     }
 
     const timer = setTimeout(() => {
-      this.recycleRoom(room.id);
+      void this.recycleRoom(room.id);
     }, this.finishedRoomTtlMs());
     this.roomCleanupTimers.set(room.id, timer);
   }
 
-  private cleanupStaleWaitingRooms(now = Date.now()): void {
+  private async cleanupStaleWaitingRooms(now = Date.now()): Promise<void> {
     for (const room of this.rooms.values()) {
       if (room.status !== 'waiting' || room.players.length !== 1) {
         continue;
@@ -563,7 +744,7 @@ export class LobbyDO {
       if (now - lastActive < this.waitingRoomTtlMs()) {
         continue;
       }
-      this.recycleRoom(room.id);
+      await this.recycleRoom(room.id);
     }
   }
 
@@ -583,6 +764,7 @@ export class LobbyDO {
     room.finishReason = 'opponent_timeout';
     await this.settleAgentStats(room);
     this.scheduleFinishedRoomRecycle(room);
+    await this.persistRuntimeState();
     this.broadcastRoom(room.id, { type: 'state', state: this.roomToState(room) });
   }
 
@@ -760,6 +942,7 @@ export class LobbyDO {
       room.lastActiveAt[room.currentTurn] = Date.now();
     }
 
+    await this.persistRuntimeState();
     const state = this.roomToState(room);
     this.broadcastRoom(room.id, { type: 'state', state });
     return { status: 200, body: state };
@@ -927,7 +1110,7 @@ export class LobbyDO {
     }
     await this.ready;
 
-    this.cleanupStaleWaitingRooms();
+    await this.cleanupStaleWaitingRooms();
 
     const url = new URL(req.url);
     const { pathname } = url;
@@ -1072,8 +1255,9 @@ export class LobbyDO {
         });
       }
 
-      const { room, seat } = this.createRoomWithPlayer(parsed.data.actorType, actorId, parsed.data.name);
+      const { room, seat } = await this.createRoomWithPlayer(parsed.data.actorType, actorId, parsed.data.name);
       seat.locale = parsed.data.locale;
+      await this.persistRuntimeState();
       return json({
         roomId: room.id,
         seatToken: seat.seatToken,
@@ -1125,7 +1309,7 @@ export class LobbyDO {
         return json({ matched: false, ticketId: existingTicketId, reused: true }, 202);
       }
 
-      const directJoin = this.tryJoinOpenWaitingRoom(me);
+      const directJoin = await this.tryJoinOpenWaitingRoom(me);
       if (directJoin) {
         return json({
           matched: true,
@@ -1138,6 +1322,7 @@ export class LobbyDO {
       }
 
       this.waitingByTicket.set(ticketId, me);
+      await this.persistRuntimeState();
 
       const opponentTicketId = Array.from(this.waitingByTicket.entries())
         .find(([candidateTicketId, candidate]) => candidateTicketId !== ticketId && candidate.actorId !== me.actorId)?.[0];
@@ -1146,12 +1331,13 @@ export class LobbyDO {
         return json({ matched: false, ticketId }, 202);
       }
 
-      this.assignMatch(opponentTicketId, ticketId);
+      await this.assignMatch(opponentTicketId, ticketId);
       const assignment = this.assignmentByTicket.get(ticketId);
       if (!assignment) {
         return json({ error: 'failed to assign matchmaking room' }, 500);
       }
       this.assignmentByTicket.delete(ticketId);
+      await this.persistRuntimeState();
       return json({
         matched: true,
         ticketId,
@@ -1168,6 +1354,7 @@ export class LobbyDO {
       const assignment = this.assignmentByTicket.get(ticketId);
       if (assignment) {
         this.assignmentByTicket.delete(ticketId);
+        await this.persistRuntimeState();
         return json({
           matched: true,
           ticketId: assignment.ticketId,
@@ -1238,6 +1425,7 @@ export class LobbyDO {
       room.lastActiveAt[1] = startedAt;
       room.lastActiveAt[2] = startedAt;
       this.seatTokenIndex.set(newSeat.seatToken, { roomId: room.id, side: newSeat.side });
+      await this.persistRuntimeState();
 
       const state = this.roomToState(room);
       this.broadcastRoom(room.id, { type: 'state', state });
@@ -1266,6 +1454,7 @@ export class LobbyDO {
       seat.seatToken = newSeatToken;
       room.lastActiveAt[seat.side] = Date.now();
       this.replaceSeatToken(room.id, seat.side, newSeatToken);
+      await this.persistRuntimeState();
       return json({ seatToken: newSeatToken, side: seat.side, state: this.roomToState(room) });
     }
 
@@ -1293,7 +1482,7 @@ export class LobbyDO {
       }
 
       this.broadcastRoom(room.id, { type: 'room_closed' });
-      this.recycleRoom(room.id);
+      await this.recycleRoom(room.id);
       return json({ closed: true });
     }
 

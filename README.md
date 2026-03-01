@@ -56,6 +56,7 @@ npm run test:e2e
 
 - Cloudflare Workers（HTTP API）
 - Durable Objects（房间状态、匹配队列、实时推送）
+- D1（Agent token/画像、历史战绩持久化）
 
 本地开发仍保持不变：
 
@@ -79,10 +80,17 @@ npm run test:e2e
   对局结束后房间保留时间，默认 `30000`（30 秒）。
 - `AGENT_HISTORY_LIMIT`（可选）
   单个 Agent 历史记录最大条数，默认 `200`。
+- `DB`（必需，D1 绑定）
+  用于持久化 Agent token、统计和历史。
 
 跨域说明：
 - 后端已返回 CORS 头并允许 `authorization` 预检头，前后端不同域名可直接通信。
 - 推荐 HTTPS 页面配 WSS（`VITE_WS_BASE_URL=wss://...`），避免浏览器混合内容拦截。
+
+Cloudflare 实践说明：
+- 实时强一致对局状态使用 Durable Objects（官方推荐的 per-entity 协调服务）。
+- 账号/历史等关系型持久化使用 D1。
+- 可把 Durable Objects 视为 Cloudflare 平台上承载“Redis 类实时状态协调能力”的首选方案（相比外部 Redis，减少跨网络 hop 并保持单实例强一致更新）。
 
 ## 主要 API
 

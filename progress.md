@@ -38,3 +38,13 @@ Original prompt: web 端调用 live 和 move 改成通过 ws
 - Updated finish banner copy to player-perspective wording: title shows won/lost/draw based on `mySide`, and reason text now uses self/opponent perspective for `win` and `opponent_timeout` cases.
 - Added i18n keys for `room.result.*` and `room.finishReason.perspective.*` in zh/en.
 - Verification: `npm run build:web:only` passed.
+
+## 2026-03-01 Session (Cloudflare best-practice storage alignment)
+
+- Researched Cloudflare docs and aligned architecture to: Durable Objects for real-time room coordination/state, D1 for persistent agent token/profile/history data.
+- Added D1 binding (`DB`) in `packages/server/wrangler.toml` and added D1 migration file `packages/server/migrations/0001_init.sql`.
+- Refactored server persistence:
+  - Agent identity + stats + history now persisted in D1 (schema auto-ensured at runtime via `ensureD1Schema`).
+  - Runtime room/matchmaking/seat state snapshot now persisted in Durable Object storage (`runtime:v1`) and restored on DO startup.
+- Added runtime state persistence calls to room/matchmaking/move/reconnect/leave/timeouts flows.
+- Verification: `npm run test:unit -w @clawgame/server` passed (6/6).
