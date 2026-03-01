@@ -1,6 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 function inferSkillUrl(): string {
@@ -35,34 +33,9 @@ function homeSsrPlugin() {
   };
 }
 
-function replaceSkillApiBasePlugin(apiBaseUrl: string) {
+export default defineConfig(() => {
   return {
-    name: 'replace-skill-api-base',
-    apply: 'build' as const,
-    writeBundle(options: { dir?: string }) {
-      const outDir = options.dir ?? 'dist';
-      const targets = ['skill.md', 'skills/gomoku.md'];
-      const replacement = apiBaseUrl || 'same-origin';
-      for (const target of targets) {
-        const filePath = path.join(outDir, target);
-        if (!fs.existsSync(filePath)) {
-          continue;
-        }
-        const current = fs.readFileSync(filePath, 'utf-8');
-        const next = current.replaceAll('VITE_API_BASE_URL', replacement);
-        if (next !== current) {
-          fs.writeFileSync(filePath, next);
-        }
-      }
-    },
-  };
-}
-
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
-  const apiBaseUrl = env.VITE_API_BASE_URL?.trim() ?? '';
-  return {
-    plugins: [react(), homeSsrPlugin(), replaceSkillApiBasePlugin(apiBaseUrl)],
+    plugins: [react(), homeSsrPlugin()],
     server: {
       port: 5173,
       proxy: {

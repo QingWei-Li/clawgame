@@ -178,37 +178,11 @@ function authHeaders(token?: string): HeadersInit | undefined {
   return { authorization: `Bearer ${token}` };
 }
 
-function trimTrailingSlash(value: string): string {
-  return value.trim().replace(/\/+$/, '');
-}
-
-const apiBaseUrl = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL?.trim() || '');
-
 function apiUrl(path: string): string {
-  if (!apiBaseUrl) {
-    return path;
-  }
-  return `${apiBaseUrl}${path}`;
+  return path;
 }
-
-function normalizeWsBase(raw: string): string {
-  const cleaned = trimTrailingSlash(raw);
-  if (cleaned.startsWith('https://')) {
-    return `wss://${cleaned.slice('https://'.length)}`;
-  }
-  if (cleaned.startsWith('http://')) {
-    return `ws://${cleaned.slice('http://'.length)}`;
-  }
-  return cleaned;
-}
-
-const wsBaseUrlEnv = trimTrailingSlash(import.meta.env.VITE_WS_BASE_URL?.trim() || '');
-const wsBaseUrl = wsBaseUrlEnv ? normalizeWsBase(wsBaseUrlEnv) : '';
 
 function wsUrl(pathAndQuery: string): string {
-  if (wsBaseUrl) {
-    return `${wsBaseUrl}${pathAndQuery}`;
-  }
   return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${pathAndQuery}`;
 }
 

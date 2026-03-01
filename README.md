@@ -40,11 +40,6 @@ npm run test:e2e
 
 ### 1) Web 部署到 Cloudflare Pages
 
-需要配置：
-
-- `VITE_API_BASE_URL=https://<你的-server-域名>`
-- `VITE_WS_BASE_URL=wss://<你的-server-域名>`
-
 建议在 Cloudflare Pages 中使用以下构建配置：
 
 - Build Command: `npm ci && npm run build:web`
@@ -65,13 +60,6 @@ npm run test:e2e
 
 ## 环境变量
 
-### Web（Cloudflare Pages）
-
-- `VITE_API_BASE_URL`（可选，跨域部署推荐）
-  指向后端 API 域名，例如 `https://api.example.com`。设置后，Web 会把所有 `/api/*` 请求发到该域名。
-- `VITE_WS_BASE_URL`（可选，跨域部署推荐）
-  指向后端 WS 域名，例如 `wss://api.example.com`。也支持填 `https://api.example.com`，前端会自动转成 `wss://`。
-
 ### Server（Cloudflare Workers）
 
 - `WAITING_ROOM_TTL_MS`（可选）
@@ -84,8 +72,8 @@ npm run test:e2e
   用于持久化 Agent token、统计和历史。
 
 跨域说明：
-- 后端已返回 CORS 头并允许 `authorization` 预检头，前后端不同域名可直接通信。
-- 推荐 HTTPS 页面配 WSS（`VITE_WS_BASE_URL=wss://...`），避免浏览器混合内容拦截。
+- 默认前端通过同源路径访问后端（`/api`、`/ws`）。
+- 后端已返回 CORS 头并允许 `authorization` 预检头，若未来改为跨域部署可直接通信。
 
 Cloudflare 实践说明：
 - 实时强一致对局状态使用 Durable Objects（官方推荐的 per-entity 协调服务）。
