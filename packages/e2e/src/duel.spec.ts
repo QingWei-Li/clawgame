@@ -588,6 +588,69 @@ test('board should place stones on intersections', async ({ browser, request }) 
   }
 });
 
+test('board info layout should stay stable during duel on desktop and mobile', async ({ browser, request }) => {
+  if (!(await ensureWebServerReachable(request))) {
+    test.skip(true, 'web dev server is not reachable on 5173 in this environment');
+  }
+
+  const viewports = [
+    { label: 'desktop', viewport: { width: 1366, height: 900 } },
+    { label: 'mobile', viewport: { width: 390, height: 844 } },
+  ] as const;
+
+  for (const profile of viewports) {
+    const ctxA = await browser.newContext({ viewport: profile.viewport });
+    const ctxB = await browser.newContext({ viewport: profile.viewport });
+    const pageA = await ctxA.newPage();
+    const pageB = await ctxB.newPage();
+
+    try {
+      await pageA.goto('http://127.0.0.1:5173');
+      await pageA.getByRole('button', { name: /我是人类|I am Human/i }).click();
+      await pageA.getByPlaceholder(/我的昵称|Your name/i).first().fill(`layout-a-${profile.label}-${Date.now()}`);
+      await pageA.getByRole('button', { name: /创建房间|Create Room/i }).click();
+
+      await pageA.waitForFunction(() => Boolean(new URLSearchParams(window.location.search).get('roomId')));
+      const roomId = await pageA.evaluate(() => new URLSearchParams(window.location.search).get('roomId'));
+      expect(roomId).toBeTruthy();
+
+      await pageB.goto(`http://127.0.0.1:5173/?roomId=${roomId}`);
+      await expect(pageB.locator('.modal-overlay')).toBeVisible();
+      await pageB.getByPlaceholder(/我的昵称|Your name/i).fill(`layout-b-${profile.label}-${Date.now()}`);
+      await pageB.getByRole('button', { name: /加入房间|Join Room/i }).last().click();
+      await expect(pageB.locator('.modal-overlay')).toHaveCount(0);
+
+      await expect(pageA.locator('.board-info-live')).toBeVisible();
+      await expect(pageA.locator('.board-countdown')).toContainText(/回合倒计时|Turn countdown/i);
+
+      const boardSurface = pageA.locator('.board-surface');
+      const firstBox = await boardSurface.boundingBox();
+      expect(firstBox).not.toBeNull();
+
+      await pageA.waitForTimeout(2200);
+      const secondBox = await boardSurface.boundingBox();
+      expect(secondBox).not.toBeNull();
+      expect(Math.abs((secondBox?.y ?? 0) - (firstBox?.y ?? 0))).toBeLessThanOrEqual(1);
+
+      const firstMove = pageA.getByLabel('cell-7-7');
+      await firstMove.click();
+      await expect(firstMove.locator('.stone.black')).toBeVisible();
+
+      const secondMove = pageB.getByLabel('cell-8-7');
+      await secondMove.click();
+      await expect(secondMove.locator('.stone.white')).toBeVisible();
+
+      await pageA.waitForTimeout(1200);
+      const thirdBox = await boardSurface.boundingBox();
+      expect(thirdBox).not.toBeNull();
+      expect(Math.abs((thirdBox?.y ?? 0) - (firstBox?.y ?? 0))).toBeLessThanOrEqual(1);
+    } finally {
+      await ctxA.close();
+      await ctxB.close();
+    }
+  }
+});
+
 test('agent matchmaking should be idempotent for same agent token', async ({ request }) => {
   const registerRes = await request.post('http://127.0.0.1:8787/api/agent/register', {
     data: { name: `agent-idem-${Date.now()}`, provider: 'codex', model: 'gpt-5' },

@@ -53,6 +53,8 @@ export function RoomView(props: RoomViewProps) {
   } = props;
   const orderedLogs = [...recentLogs].sort((a, b) => b.createdAt - a.createdAt);
   const formatLogTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour12: false });
+  const isPlaying = state.status === 'playing';
+  const countdownText = isPlaying && state.turnDeadlineAt ? formatCountdown(turnRemainingMs) : '--:--';
 
   return (
     <div style={{ width: '100%' }}>
@@ -100,15 +102,13 @@ export function RoomView(props: RoomViewProps) {
               <span className="status-badge">{state.status === 'playing' ? t('room.status.playing') : state.status === 'finished' ? t('room.status.finished') : t('room.status.waiting')}</span>
               <span>{t('room.currentTurn')}: {state.currentTurn === 1 ? t('room.blackFirst') : t('room.white')}</span>
             </div>
-            {state.status === 'playing' && (
-              <div className="board-info-live">
-                <span>{t('room.moveCount')}: {state.moves}</span>
-                <span className="board-countdown">
-                  {t('room.turnCountdown')}:
-                  <span>{formatCountdown(turnRemainingMs)}</span>
-                </span>
-              </div>
-            )}
+            <div className={`board-info-live${isPlaying ? '' : ' is-hidden'}`} aria-hidden={!isPlaying}>
+              <span>{t('room.moveCount')}: {state.moves}</span>
+              <span className="board-countdown">
+                {t('room.turnCountdown')}:
+                <span>{countdownText}</span>
+              </span>
+            </div>
           </div>
 
           <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', gap: '24px' }}>

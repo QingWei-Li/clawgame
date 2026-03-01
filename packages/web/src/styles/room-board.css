@@ -159,12 +159,20 @@
 
 .board-info-live {
   padding-left: 2px;
+  min-height: 1.4em;
+  white-space: nowrap;
+}
+
+.board-info-live.is-hidden {
+  visibility: hidden;
 }
 
 .board-countdown {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .board-countdown span {

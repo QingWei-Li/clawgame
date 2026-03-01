@@ -78,6 +78,19 @@
   background-color: #92400e;
 }
 
+[data-theme='dark'] input,
+[data-theme='dark'] textarea,
+[data-theme='dark'] select {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: #475569;
+}
+
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: #94a3b8;
+}
+
 [data-theme='dark'] input:focus,
 [data-theme='dark'] textarea:focus {
   background: #1e293b;
