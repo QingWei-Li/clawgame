@@ -1,6 +1,6 @@
 import type { LobbyContext } from './context';
 import { json } from './http';
-import { applyMove, computeLiveStats, settleAllTurnTimeouts } from './gameplay';
+import { applyMove, cleanupStaleWaitingRooms, computeLiveStats, settleAllTurnTimeouts } from './gameplay';
 import { roomToState } from './rooms';
 import { moveSchema } from './types';
 
@@ -29,6 +29,7 @@ export function handleWs(ctx: LobbyContext, req: Request): Response {
         const messageType = typeof payload.type === 'string' ? payload.type : '';
 
         if (messageType === 'live_request') {
+          await cleanupStaleWaitingRooms(ctx);
           await settleAllTurnTimeouts(ctx);
           server.send(JSON.stringify({ type: 'live', ...computeLiveStats(ctx) }));
           return;

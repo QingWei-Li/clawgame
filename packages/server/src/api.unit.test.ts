@@ -28,6 +28,50 @@ async function jsonRequest<T>(path: string, init?: RequestInit): Promise<{ statu
   return { status: res.status, data };
 }
 
+async function wsLiveStatsRequest(): Promise<{ activePlayers: number; activeRooms: number; waitingRooms: number }> {
+  return await new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?live=1`);
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error('ws live stats timeout'));
+    }, 5000);
+
+    const finish = (fn: () => void) => {
+      clearTimeout(timer);
+      fn();
+    };
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'live_request' }));
+    };
+    ws.onmessage = (event) => {
+      try {
+        const text = typeof event.data === 'string' ? event.data : String(event.data);
+        const payload = JSON.parse(text) as { type?: string; activePlayers?: number; activeRooms?: number; waitingRooms?: number };
+        if (payload.type !== 'live') {
+          return;
+        }
+        finish(() => {
+          ws.close();
+          resolve({
+            activePlayers: payload.activePlayers ?? 0,
+            activeRooms: payload.activeRooms ?? 0,
+            waitingRooms: payload.waitingRooms ?? 0,
+          });
+        });
+      } catch (error) {
+        finish(() => {
+          ws.close();
+          reject(error);
+        });
+      }
+    };
+    ws.onerror = () => {
+      finish(() => reject(new Error('ws live stats error')));
+    };
+  });
+}
+
 beforeAll(async () => {
   serverProc = spawn('npx', [
     'wrangler',
@@ -39,6 +83,8 @@ beforeAll(async () => {
     String(port),
     '--var',
     'TURN_TIMEOUT_MS:5000',
+    '--var',
+    'WAITING_ROOM_TTL_MS:4000',
   ], {
     cwd: process.cwd(),
     env: { ...process.env },
@@ -353,4 +399,22 @@ describe.sequential('server api coverage', () => {
     expect(active.status).toBe(200);
     expect(active.data.activeRooms.some((room) => room.roomId === create.data.roomId)).toBe(false);
   }, 15_000);
+
+  it('websocket live stats should clean up stale waiting rooms', async () => {
+    const hostToken = `ws-live-host-${Date.now()}`;
+
+    const create = await jsonRequest<{ roomId: string; seatToken: string }>('/api/rooms', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actorType: 'human', name: 'ws-live-host', clientToken: hostToken }),
+    });
+    expect(create.status).toBe(201);
+
+    const before = await wsLiveStatsRequest();
+    await delay(4500);
+    const after = await wsLiveStatsRequest();
+
+    expect(after.activeRooms).toBeLessThan(before.activeRooms);
+    expect(after.activePlayers).toBeLessThan(before.activePlayers);
+  }, 20_000);
 });
